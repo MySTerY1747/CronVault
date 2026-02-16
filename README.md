@@ -10,6 +10,7 @@ CLI tool that allows the user to specify:
 - A time interval
 - A naming scheme
 - Maximum backup size
+- A unique name to identify this backup
 
 The tool will create a JSON file with the relevant details in the user's `~/.config` directory, and add a cron job that runs in the specified interval, running the script using that JSON file.
 
