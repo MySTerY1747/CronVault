@@ -3,8 +3,10 @@
 
 import logging
 import argparse
+from logging import Logger
 
-NAME_DEFAULT: str = "None"
+NAME_DEFAULT: str = "NoName"
+CONFIG_LOCATION: str = "~/.config/CronVault/"
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -26,4 +28,5 @@ if __name__ == "__main__":
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
     )
+    LOGGER: Logger = logging.getLogger()
     logging.info("Finished parsing command-line arguments")
