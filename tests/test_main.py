@@ -17,7 +17,8 @@ def test_help():
 def test_cli_args():
     options: list[str] = [
         "-h",
-        "--help-v",
+        "--help",
+        "-v",
         "--verbose",
         "-n",
         "--name",
