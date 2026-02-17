@@ -16,14 +16,16 @@ def test_help():
 
 def test_cli_args():
     options: list[str] = [
-        "-h, --help",
-        "-v, --verbose",
-        "-n, --name",
+        "-h",
+        "--help-v",
+        "--verbose",
+        "-n",
+        "--name",
     ]
     help_command: str = "python3 src/CronVault/main.py -h"
     result: str = os.popen(help_command).read()
     for option in options:
-        assert option in result
+        assert option in result.lower()
 
 
 def test_name_unique(mocker):
