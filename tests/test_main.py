@@ -17,6 +17,7 @@ def test_cli_args():
     options: list[str] = [
         "-h, --help",
         "-v, --verbose",
+        "-n, --name",
     ]
     help_command: str = "python3 src/CronVault/main.py -h"
     result: str = os.popen(help_command).read()
