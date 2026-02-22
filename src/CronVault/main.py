@@ -5,8 +5,11 @@ import logging
 import argparse
 from logging import Logger
 
-NAME_DEFAULT: str = "NoName"
-CONFIG_LOCATION: str = "~/.config/CronVault/"
+from utils.utils import check_if_name_unique, parse_size
+
+NAME_DEFAULT: str = "NoName"  #  TODO: Change this to last elm of folder name
+
+FIFTY_GB: int = 53_687_091_200  #  50GB
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -18,9 +21,16 @@ if __name__ == "__main__":
     parser.add_argument(
         "-n",
         "--name",
-        type=str,
+        type=check_if_name_unique,
         default=NAME_DEFAULT,
         help="Unique name to identify this backup",
+    )
+    parser.add_argument(
+        "-m",
+        "--max-backup-size",
+        type=parse_size,
+        help="Maximum total size of backups before overwriting old ones (e.g. 10MB, 4GB, 500K)",
+        default=FIFTY_GB,
     )
 
     args = parser.parse_args()
@@ -30,3 +40,4 @@ if __name__ == "__main__":
     )
     LOGGER: Logger = logging.getLogger()
     logging.info("Finished parsing command-line arguments")
+    logging.info("Checking command-line arguments")

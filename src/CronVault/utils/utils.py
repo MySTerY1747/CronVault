@@ -2,24 +2,53 @@
 #  small functions that don't belong with the rest of the code
 
 import os
+import re
 import logging
-from CronVault.main import CONFIG_LOCATION
+
+CONFIG_LOCATION: str = "~/.config/CronVault/"
 
 
 def check_if_name_unique(name: str) -> bool:
+    assert (type(name) is str) and (len(name) >= 1)
+    config_folder: str = os.path.expanduser(CONFIG_LOCATION)
     try:
-        config_folder: str = os.path.expanduser(CONFIG_LOCATION)
+        if not os.path.exists(config_folder):
+            logging.info("Config directory does not exist. Creating now.")
+            os.makedirs(config_folder)
         backups: list[str] | None = os.listdir(config_folder)
         #  i know we can return directly here
         #  but here this is done for readability
-        print(f"{backups=}, {name=}")
         if (backups is None) or (name in backups):
             return False
         return True
     except (OSError, FileNotFoundError) as e:
-        logging.exception("Issue finding config folder")
-        print(e)
+        logging.exception(f"Issue finding config folder: {e}")
     raise (OSError)
+
+
+def parse_size(value: str) -> int:
+    assert type(value) is str and len(value) >= 1
+    pattern = r"^(\d+)([KMGTP]?B?)?$"
+    match = re.fullmatch(pattern, value.strip().upper())
+    if not match:
+        logging.exception("Invalid size")
+        raise ValueError(f"Invalid size: {value}")
+
+    number, unit = match.groups()
+    number = int(number)
+    multipliers = {
+        None: 1,
+        "B": 1,
+        "K": 1024,
+        "KB": 1024,
+        "M": 1024**2,
+        "MB": 1024**2,
+        "G": 1024**3,
+        "GB": 1024**3,
+        "T": 1024**4,
+        "TB": 1024**4,
+    }
+    return number * multipliers.get(unit, 1)
 
 
 if __name__ == "__main__":

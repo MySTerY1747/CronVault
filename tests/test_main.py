@@ -3,6 +3,7 @@
 
 import os
 import CronVault.utils.utils
+import pytest
 
 
 def test_help():
@@ -22,6 +23,8 @@ def test_cli_args():
         "--verbose",
         "-n",
         "--name",
+        "-m",
+        "--max-backup-size",
     ]
     help_command: str = "python3 src/CronVault/main.py -h"
     result: str = os.popen(help_command).read()
@@ -56,4 +59,27 @@ def test_add_duplicate_name(mocker):
 
 
 def test_add_empty_name():
-    pass
+    with pytest.raises(AssertionError):
+        CronVault.utils.utils.check_if_name_unique("")
+
+
+@pytest.mark.parametrize(
+    "size, expected",
+    [
+        ("15", 15),
+        ("15b", 15),
+        ("15kB", 15 * 1024),
+        ("15k", 15 * 1024),
+        ("15mB", 15 * 1024**2),
+        ("15M", 15 * 1024**2),
+    ],
+)
+def test_parse_size(size: str, expected: int):
+    assert CronVault.utils.utils.parse_size(size) == expected
+
+
+def test_parse_size_incorrect_input():
+    with pytest.raises(ValueError):
+        CronVault.utils.utils.parse_size("Mb15")
+    with pytest.raises(ValueError):
+        CronVault.utils.utils.parse_size("INCORRECT_VALUE")
