@@ -36,6 +36,9 @@ def test_name_unique(mocker):
     mock_expanduser = mocker.patch("CronVault.utils.utils.os.path.expanduser")
     mock_expanduser.return_value = "/Users/stefanos/.config/CronVault/"
 
+    mock_os_path_exists = mocker.patch("CronVault.utils.utils.os.path.exists")
+    mock_os_path_exists.return_value = True
+
     mock_listdir = mocker.patch("CronVault.utils.utils.os.listdir")
     mock_listdir.return_value = ["Backup1", "Backup2", "Backup3"]
 
@@ -48,6 +51,9 @@ def test_name_unique(mocker):
 def test_add_duplicate_name(mocker):
     mock_expanduser = mocker.patch("CronVault.utils.utils.os.path.expanduser")
     mock_expanduser.return_value = "/Users/stefanos/.config/CronVault/"
+
+    mock_os_path_exists = mocker.patch("CronVault.utils.utils.os.path.exists")
+    mock_os_path_exists.return_value = True
 
     mock_listdir = mocker.patch("CronVault.utils.utils.os.listdir")
     mock_listdir.return_value = ["Backup1", "Backup2", "Backup3"]
