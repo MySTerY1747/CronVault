@@ -8,7 +8,7 @@ import logging
 CONFIG_LOCATION: str = "~/.config/CronVault/"
 
 
-def check_if_name_unique(name: str) -> bool:
+def parse_name(name: str) -> bool:
     assert (type(name) is str) and (len(name) >= 1)
     config_folder: str = os.path.expanduser(CONFIG_LOCATION)
     try:
@@ -49,6 +49,14 @@ def parse_size(value: str) -> int:
         "TB": 1024**4,
     }
     return number * multipliers.get(unit, 1)
+
+
+def parse_folder_name(folder_path: str) -> bool:
+    #  check type and length
+    #  check proper formatting
+    #  check if path exists
+    #  make sure to mock in tests
+    pass
 
 
 if __name__ == "__main__":
