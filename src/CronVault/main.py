@@ -5,7 +5,7 @@ import logging
 import argparse
 from logging import Logger
 
-from utils.utils import check_if_name_unique, parse_size
+from utils.utils import parse_name, parse_size, parse_folder_name
 
 NAME_DEFAULT: str = "NoName"  #  TODO: Change this to last elm of folder name
 
@@ -21,7 +21,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-n",
         "--name",
-        type=check_if_name_unique,
+        type=parse_name,
         default=NAME_DEFAULT,
         help="Unique name to identify this backup",
     )
@@ -31,6 +31,13 @@ if __name__ == "__main__":
         type=parse_size,
         help="Maximum total size of backups before overwriting old ones (e.g. 10MB, 4GB, 500K)",
         default=FIFTY_GB,
+    )
+    parser.add_argument(
+        "-f",
+        "--folder-path",
+        type=parse_folder_name,
+        help="Specifies the folder to back up",
+        required=True,
     )
 
     args = parser.parse_args()

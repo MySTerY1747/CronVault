@@ -56,7 +56,14 @@ def parse_folder_name(folder_path: str) -> bool:
     #  check proper formatting
     #  check if path exists
     #  make sure to mock in tests
-    pass
+    assert (type(folder_path) is str) and (len(folder_path) > 0)
+    pattern = r"^(.+)\/([^\/]+)$"
+    match = re.fullmatch(pattern, folder_path)
+    if not match:
+        logging.exception(f"Invalid path: {folder_path}")
+        raise OSError(f"Invalid path: {folder_path}")
+
+    return os.path.exists(folder_path)
 
 
 if __name__ == "__main__":
