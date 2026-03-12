@@ -4,6 +4,7 @@
 import os
 import CronVault.utils.utils
 import pytest
+from datetime import datetime
 
 
 def test_help():
@@ -121,3 +122,22 @@ def test_path_exists_existent(mocker):
         CronVault.utils.utils.parse_path("/definitely/real/directory")
         == "/definitely/real/directory"
     )
+
+
+def test_parse_name_format_long_name():
+    with pytest.raises(AssertionError):
+        CronVault.utils.utils.parse_name_format(
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        )
+
+
+def test_parse_name_format_datetime():
+    input_parameter: str = "%y test 123"
+    result: str = CronVault.utils.utils.parse_name_format(input_parameter)
+    assert result == datetime.now().strftime(input_parameter)
+
+
+def test_parse_name_format_invalid_filename():
+    input_parameter: str = "abc:548?"
+    result: str = CronVault.utils.utils.parse_name_format(input_parameter)
+    assert result == "abc_548_"
