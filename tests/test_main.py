@@ -28,6 +28,8 @@ def test_cli_args():
         "--max-backup-size",
         "-p",
         "--path",
+        "-f",
+        "--naming-format",
     ]
     help_command: str = "python3 src/CronVault/main.py -h"
     result: str = os.popen(help_command).read()
@@ -134,7 +136,7 @@ def test_parse_name_format_long_name():
 def test_parse_name_format_datetime():
     input_parameter: str = "%y test 123"
     result: str = CronVault.utils.utils.parse_name_format(input_parameter)
-    assert result == datetime.now().strftime(input_parameter)
+    assert result == "%y_test_123"
 
 
 def test_parse_name_format_invalid_filename():

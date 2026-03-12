@@ -5,7 +5,7 @@ import logging
 import argparse
 from logging import Logger
 
-from utils.utils import parse_name, parse_size, parse_path
+from utils.utils import parse_name, parse_size, parse_path, parse_name_format
 
 NAME_DEFAULT: str = "NoName"  #  TODO: Change this to last elm of folder name
 
@@ -38,6 +38,14 @@ if __name__ == "__main__":
         type=parse_path,
         help="Specifies the directory path to back up",
         required=True,
+    )
+    parser.add_argument(
+        "-f",
+        "--naming-format",
+        type=parse_name_format,
+        help="Naming scheme for backups. Uses strftime syntax",
+        required=False,
+        default=NAME_DEFAULT,
     )
 
     args = parser.parse_args()

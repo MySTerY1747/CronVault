@@ -4,6 +4,7 @@
 import os
 import re
 import logging
+from datetime import datetime
 
 CONFIG_LOCATION: str = "~/.config/CronVault/"
 
@@ -65,10 +66,6 @@ def parse_path(folder_path: str) -> str:
         raise OSError(f"Path not found: {folder_path}")
 
 
-def sanitize_filename(filename: str) -> str:
-    return re.sub(r"[^A-Za-z0-9._-]", "_", filename)
-
-
 def parse_name_format(name_format: str) -> str:
     """parses the name format CLI argument. Checks whether it is a valid name format to be used with strftime
 
@@ -78,7 +75,11 @@ def parse_name_format(name_format: str) -> str:
     Returns:
         (str) the output name format, or OSError
     """
-    pass
+    assert len(name_format) < 200
+    assert datetime.now().strftime(name_format)
+
+    #  ensure valid output filename
+    return re.sub(r"[^A-Za-z0-9.%_-]", "_", name_format)
 
 
 if __name__ == "__main__":
