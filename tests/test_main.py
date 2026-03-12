@@ -44,9 +44,9 @@ def test_name_unique(mocker):
     mock_listdir = mocker.patch("CronVault.utils.utils.os.listdir")
     mock_listdir.return_value = ["Backup1", "Backup2", "Backup3"]
 
-    result: bool = CronVault.utils.utils.parse_name("Backup 4")
+    result: str = CronVault.utils.utils.parse_name("Backup 4")
 
-    assert result is True
+    assert result == "Backup 4"
     mock_listdir.assert_called_once_with("/Users/stefanos/.config/CronVault/")
 
 
@@ -60,9 +60,9 @@ def test_add_duplicate_name(mocker):
     mock_listdir = mocker.patch("CronVault.utils.utils.os.listdir")
     mock_listdir.return_value = ["Backup1", "Backup2", "Backup3"]
 
-    result: bool = CronVault.utils.utils.parse_name("Backup3")
+    with pytest.raises(ValueError):
+        CronVault.utils.utils.parse_name("Backup3")
 
-    assert result is False
     mock_listdir.assert_called_once_with("/Users/stefanos/.config/CronVault/")
 
 
@@ -109,11 +109,15 @@ def test_path_exists_nonexistent(mocker):
     mock_os_path_exists = mocker.patch("CronVault.utils.utils.os.path.exists")
     mock_os_path_exists.return_value = False
 
-    assert not CronVault.utils.utils.parse_path("/non/existent/path")
+    with pytest.raises(OSError):
+        CronVault.utils.utils.parse_path("/non/existent/path")
 
 
 def test_path_exists_existent(mocker):
     mock_os_path_exists = mocker.patch("CronVault.utils.utils.os.path.exists")
     mock_os_path_exists.return_value = True
 
-    assert CronVault.utils.utils.parse_path("/definitely/real/directory")
+    assert (
+        CronVault.utils.utils.parse_path("/definitely/real/directory")
+        == "/definitely/real/directory"
+    )

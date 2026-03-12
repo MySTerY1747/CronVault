@@ -48,3 +48,4 @@ if __name__ == "__main__":
     LOGGER: Logger = logging.getLogger()
     logging.info("Finished parsing command-line arguments")
     logging.info("Checking command-line arguments")
+    logging.info(args)
