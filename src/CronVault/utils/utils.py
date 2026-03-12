@@ -51,7 +51,7 @@ def parse_size(value: str) -> int:
     return number * multipliers.get(unit, 1)
 
 
-def parse_folder_name(folder_path: str) -> bool:
+def parse_path(folder_path: str) -> bool:
     #  check type and length
     #  check proper formatting
     #  check if path exists

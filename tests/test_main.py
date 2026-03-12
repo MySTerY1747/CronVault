@@ -25,8 +25,8 @@ def test_cli_args():
         "--name",
         "-m",
         "--max-backup-size",
-        "-f",
-        "--folder-path",
+        "-p",
+        "--path",
     ]
     help_command: str = "python3 src/CronVault/main.py -h"
     result: str = os.popen(help_command).read()
@@ -95,25 +95,25 @@ def test_parse_size_incorrect_input():
 
 def test_path_exists_empty():
     with pytest.raises(AssertionError):
-        CronVault.utils.utils.parse_folder_name("")
+        CronVault.utils.utils.parse_path("")
 
 
 def test_path_exists_wrong_format():
     with pytest.raises(OSError):
-        CronVault.utils.utils.parse_folder_name("124 \\ 54 kd & # (! ")
+        CronVault.utils.utils.parse_path("124 \\ 54 kd & # (! ")
     with pytest.raises(AssertionError):
-        CronVault.utils.utils.parse_folder_name("")
+        CronVault.utils.utils.parse_path("")
 
 
 def test_path_exists_nonexistent(mocker):
     mock_os_path_exists = mocker.patch("CronVault.utils.utils.os.path.exists")
     mock_os_path_exists.return_value = False
 
-    assert not CronVault.utils.utils.parse_folder_name("/non/existent/path")
+    assert not CronVault.utils.utils.parse_path("/non/existent/path")
 
 
 def test_path_exists_existent(mocker):
     mock_os_path_exists = mocker.patch("CronVault.utils.utils.os.path.exists")
     mock_os_path_exists.return_value = True
 
-    assert CronVault.utils.utils.parse_folder_name("/definitely/real/directory")
+    assert CronVault.utils.utils.parse_path("/definitely/real/directory")
