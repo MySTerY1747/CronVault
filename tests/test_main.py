@@ -31,6 +31,8 @@ def test_cli_args():
         "--destination",
         "-f",
         "--naming-format",
+        "-t",
+        "--time-period",
     ]
     help_command: str = "python3 src/CronVault/main.py -h"
     result: str = os.popen(help_command).read()
