@@ -28,6 +28,8 @@ def test_cli_args():
         "--max-backup-size",
         "-p",
         "--path",
+        "-d",
+        "--destination",
         "-f",
         "--naming-format",
     ]

@@ -40,6 +40,13 @@ if __name__ == "__main__":
         required=True,
     )
     parser.add_argument(
+        "-d",
+        "--destination",
+        type=parse_path,
+        help="Specifies the destination directory where backups will be stored",
+        required=True,
+    )
+    parser.add_argument(
         "-f",
         "--naming-format",
         type=parse_name_format,
