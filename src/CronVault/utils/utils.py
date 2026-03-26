@@ -5,6 +5,7 @@ import os
 import re
 import logging
 from datetime import datetime
+import pytimeparse
 
 CONFIG_LOCATION: str = "~/.config/CronVault/"
 
@@ -83,7 +84,16 @@ def parse_name_format(name_format: str) -> str:
 
 
 def parse_time_period(time_period: str) -> int:
-    pass
+    if type(time_period) is not str or len(time_period) < 1:
+        logging.exception(f"Invalid string time period: {time_period}")
+        raise ValueError(f"Invalid string time period: {time_period}")
+
+    total_seconds: int | float | None = pytimeparse.timeparse.timeparse(time_period)
+    if total_seconds is None:
+        logging.exception(f"Invalid time period: {time_period}")
+        raise ValueError(f"Invalid time period: {time_period}")
+
+    return int(total_seconds)
 
 
 if __name__ == "__main__":

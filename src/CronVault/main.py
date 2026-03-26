@@ -54,6 +54,13 @@ if __name__ == "__main__":
         required=False,
         default=NAME_DEFAULT,
     )
+    parser.add_argument(
+        "-t",
+        "--time-period",
+        type=parse_name_format,
+        help='Time period between backups. Uses natural syntax: "5 days", "15d10h", "1w 3d 2h 32m", "172 hours", etc.',
+        required=True,
+    )
 
     args = parser.parse_args()
     logging.basicConfig(
