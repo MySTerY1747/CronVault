@@ -4,7 +4,6 @@
 import os
 import CronVault.utils.utils
 import pytest
-from datetime import datetime
 
 
 def test_help():
@@ -145,3 +144,28 @@ def test_parse_name_format_invalid_filename():
     input_parameter: str = "abc:548?"
     result: str = CronVault.utils.utils.parse_name_format(input_parameter)
     assert result == "abc_548_"
+
+
+@pytest.mark.parametrize(
+    "input_period, expected",
+    [
+        ("4m30s", 4 * 60 + 30),
+        ("5 days", 60 * 24 * 24 * 5),
+        ("5 days 10 hours", (60 * 24 * 24 * 5) + (60 * 60 * 10)),
+        ("172 hrs", 60 * 60 * 172),
+        ("10 weeks", 60 * 60 * 24 * 7 * 10),
+        ("10w", 60 * 60 * 24 * 7 * 10),
+    ],
+)
+def test_parse_time_period(input_period: str, expected: int):
+    assert CronVault.utils.utils.parse_time_period(input_period) == expected
+
+
+def test_parse_time_period_error():
+    empty_input: str = ""
+    unknown_values: str = "Alice and Bob"
+
+    with pytest.raises(ValueError):
+        CronVault.utils.utils.parse_time_period(empty_input)
+    with pytest.raises(ValueError):
+        CronVault.utils.utils.parse_time_period(unknown_values)

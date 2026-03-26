@@ -82,5 +82,9 @@ def parse_name_format(name_format: str) -> str:
     return re.sub(r"[^A-Za-z0-9.%_-]", "_", name_format)
 
 
+def parse_time_period(time_period: str) -> int:
+    pass
+
+
 if __name__ == "__main__":
     pass
