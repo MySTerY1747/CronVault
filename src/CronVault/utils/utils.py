@@ -20,7 +20,11 @@ def parse_name(name: str) -> str:
             logging.info("Config directory does not exist. Creating now.")
             os.makedirs(config_folder)
         backups: list[str] | None = os.listdir(config_folder)
-        if (backups is None) or (name in backups):
+        if (
+            (backups is None)
+            or (name in backups)
+            or (name in map(lambda x: x.replace(".json", ""), backups))
+        ):
             logging.exception(f"Error: unique name already in use: {name}")
             raise ValueError(f"Error: unique name already in use {name}")
         return name

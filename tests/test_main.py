@@ -48,7 +48,7 @@ def test_name_unique(mocker):
     mock_os_path_exists.return_value = True
 
     mock_listdir = mocker.patch("CronVault.utils.utils.os.listdir")
-    mock_listdir.return_value = ["Backup1", "Backup2", "Backup3"]
+    mock_listdir.return_value = ["Backup1.json", "Backup2.json", "Backup3.json"]
 
     result: str = CronVault.utils.utils.parse_name("Backup 4")
 
@@ -64,7 +64,7 @@ def test_add_duplicate_name(mocker):
     mock_os_path_exists.return_value = True
 
     mock_listdir = mocker.patch("CronVault.utils.utils.os.listdir")
-    mock_listdir.return_value = ["Backup1", "Backup2", "Backup3"]
+    mock_listdir.return_value = ["Backup1.json", "Backup2.json", "Backup3.json"]
 
     with pytest.raises(ValueError):
         CronVault.utils.utils.parse_name("Backup3")
