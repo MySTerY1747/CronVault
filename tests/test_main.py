@@ -171,3 +171,58 @@ def test_parse_time_period_error():
         CronVault.utils.utils.parse_time_period(empty_input)
     with pytest.raises(ValueError):
         CronVault.utils.utils.parse_time_period(unknown_values)
+
+
+@pytest.mark.parametrize(
+    "source_directory, expected_output",
+    [
+        ("~/TestDirectory/our_target_directory", "our_target_directory"),
+        ("~/TestDirectory/our_target_directory/", "our_target_directory"),
+        ("/test/", "test"),
+        ("ABC", "ABC"),
+        ("/test/directory with spaces/target/", "target"),
+    ],
+)
+def test_default_backup_name(source_directory: str, expected_output: str, mocker):
+    mocker.patch("CronVault.utils.utils.parse_name", side_effect=lambda x: x)
+
+    assert (
+        CronVault.utils.utils.get_default_backup_name(source_directory)
+        == expected_output
+    )
+
+
+@pytest.mark.parametrize(
+    "source_directory, expected_output",
+    [
+        ("~/TestDirectory/our_target_directory", "our_target_directory_4"),
+        ("~/TestDirectory/our_target_directory/", "our_target_directory_3"),
+        ("/test/", "test_2"),
+        ("ABC", "ABC_1"),
+        ("/test/directory with spaces/target/", "target_4"),
+    ],
+)
+def test_default_backup_name_not_unique(
+    #  a recursively mocked test
+    #  I can't decide if this is the best code I've ever written
+    #  or the absolute worst...
+    mocker,
+    source_directory: str,
+    expected_output: str,
+):
+    def mock_parse_name(name: str, expected_output_name: str):
+        if name == expected_output_name:
+            return name
+        else:
+            raise ValueError(f"Invalid name: {name}")
+
+    mocker.patch("CronVault.utils.utils.parse_name", side_effect=mock_parse_name)
+    try:
+        assert (
+            CronVault.utils.utils.get_default_backup_name(source_directory)
+            == expected_output
+        )
+    except RecursionError:
+        raise ValueError(
+            f"Recursion error. {source_directory} never turned into {expected_output}"
+        )

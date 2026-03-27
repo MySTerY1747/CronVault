@@ -19,8 +19,8 @@ def parse_name(name: str) -> str:
             os.makedirs(config_folder)
         backups: list[str] | None = os.listdir(config_folder)
         if (backups is None) or (name in backups):
-            logging.exception(f"Invalid name: {name}")
-            raise ValueError(f"Invalid name: {name}")
+            logging.exception(f"Error: unique name already in use: {name}")
+            raise ValueError(f"Error: unique name already in use {name}")
         return name
     except (OSError, FileNotFoundError) as e:
         logging.exception(f"Issue finding config folder: {e}")
@@ -94,6 +94,10 @@ def parse_time_period(time_period: str) -> int:
         raise ValueError(f"Invalid time period: {time_period}")
 
     return int(total_seconds)
+
+
+def get_default_backup_name(directory: str):
+    pass
 
 
 if __name__ == "__main__":
