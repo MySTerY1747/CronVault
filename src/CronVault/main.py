@@ -13,7 +13,7 @@ from utils.utils import (
     get_default_backup_name,
 )
 
-NAME_DEFAULT: str = "NoName"  #  TODO: Change this to last elm of folder name
+NAME_DEFAULT: str = "NoName"
 
 FIFTY_GB: int = 53_687_091_200  #  50GB
 
@@ -82,3 +82,9 @@ if __name__ == "__main__":
         logging.info("No name specified. Setting it based on directory")
         args.name = get_default_backup_name(args.path)
         logging.info(f"Backup name now set to {args.name}")
+
+    # TODO: create function to write CLI args to JSON file in ~/.config/CronVault/{name}.json
+    # TODO: function to actually perform the backup
+    # TODO: add cron job for each backup; maybe identify it with a comment
+    # TODO: add watchdog cron job on startup, and create associated function
+    # TODO: add functions to list, deactivate (stop), activate (start), remove, and manually run backup jobs
