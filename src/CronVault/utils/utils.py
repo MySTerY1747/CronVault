@@ -6,8 +6,10 @@ import re
 import logging
 from datetime import datetime
 import pytimeparse
+from pathlib import Path
 
 CONFIG_LOCATION: str = "~/.config/CronVault/"
+MAX_NAME_ATTEMPTS: int = 101
 
 
 def parse_name(name: str) -> str:
@@ -96,8 +98,30 @@ def parse_time_period(time_period: str) -> int:
     return int(total_seconds)
 
 
-def get_default_backup_name(directory: str):
-    pass
+def get_default_backup_name(directory: str) -> str:
+    """Return appropriate default name when user has not set it. By default set to last element of the path. Appended with `_num` until it's unique
+
+    Args:
+        directory: (str) directory returned by parse_path for the `-p` CLI arg
+    Returns:
+        (str) last elm of directory, appended if necessary until unique
+    """
+    assert type(directory) is str and len(directory) > 0
+
+    #  directory arg has gone through parse_path. assuming it's valid
+    directory_path = Path(directory)
+    last_path_elm = directory_path.name
+    count: int = 0
+    while count < MAX_NAME_ATTEMPTS:
+        try:
+            name_to_try: str = (
+                last_path_elm if count == 0 else last_path_elm + f"_{count}"
+            )
+            if parse_name(name_to_try) == name_to_try:
+                return name_to_try
+        except ValueError:
+            count += 1
+    return ""
 
 
 if __name__ == "__main__":

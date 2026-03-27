@@ -203,20 +203,26 @@ def test_default_backup_name(source_directory: str, expected_output: str, mocker
     ],
 )
 def test_default_backup_name_not_unique(
-    #  a recursively mocked test
+    #  a recursively mocked test with a closure
     #  I can't decide if this is the best code I've ever written
     #  or the absolute worst...
     mocker,
     source_directory: str,
     expected_output: str,
 ):
-    def mock_parse_name(name: str, expected_output_name: str):
-        if name == expected_output_name:
-            return name
-        else:
-            raise ValueError(f"Invalid name: {name}")
+    def mock_parse_name_generator(expected_output_name: str):
+        def mock_parse_name_specified(name: str):
+            if name == expected_output_name:
+                return name
+            else:
+                raise ValueError(f"Invalid name: {name}")
 
-    mocker.patch("CronVault.utils.utils.parse_name", side_effect=mock_parse_name)
+        return mock_parse_name_specified
+
+    mocker.patch(
+        "CronVault.utils.utils.parse_name",
+        side_effect=mock_parse_name_generator(expected_output),
+    )
     try:
         assert (
             CronVault.utils.utils.get_default_backup_name(source_directory)
