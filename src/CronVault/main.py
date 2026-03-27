@@ -5,7 +5,13 @@ import logging
 import argparse
 from logging import Logger
 
-from utils.utils import parse_name, parse_size, parse_path, parse_name_format
+from utils.utils import (
+    parse_name,
+    parse_size,
+    parse_path,
+    parse_name_format,
+    get_default_backup_name,
+)
 
 NAME_DEFAULT: str = "NoName"  #  TODO: Change this to last elm of folder name
 
@@ -71,3 +77,8 @@ if __name__ == "__main__":
     logging.info("Finished parsing command-line arguments")
     logging.info("Checking command-line arguments")
     logging.info(args)
+
+    if args.name == NAME_DEFAULT:
+        logging.info("No name specified. Setting it based on directory")
+        args.name = get_default_backup_name(args.path)
+        logging.info(f"Backup name now set to {args.name}")
