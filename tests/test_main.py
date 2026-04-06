@@ -1,6 +1,7 @@
 #  test_main.py
 #  unit tests for main function of the program
 
+from json import dumps, dump
 import os
 import CronVault.utils.utils
 import pytest
@@ -232,3 +233,23 @@ def test_default_backup_name_not_unique(
         raise ValueError(
             f"Recursion error. {source_directory} never turned into {expected_output}"
         )
+
+
+def test_convert_args_json():
+    input_dict = {
+        "name": "Test1",
+        "max_backup_size": 512000,
+        "path": "~/Downloads/Test",
+        "name_format": "Test1 %Y-%m-%M",
+        "destination": "~/Documents/Test",
+        "time_period": 2_592_000,
+    }
+
+    output_dict = input_dict.copy()
+    output_dict["last_known_backup"] = None
+    output_dict["total_backup_count"] = 0
+    output_dict["status"] = "active"
+
+    expected_output = dumps(output_dict)
+
+    assert CronVault.utils.utils.convert_user_args_json(**input_dict) == expected_output
