@@ -2,6 +2,7 @@
 #  small functions that don't belong with the rest of the code
 
 import os
+import json
 import re
 import logging
 from datetime import datetime
@@ -126,6 +127,46 @@ def get_default_backup_name(directory: str) -> str:
         except ValueError:
             count += 1
     return ""
+
+
+def convert_user_args_json(
+    name: str,
+    max_backup_size: int,
+    path: str,
+    name_format: str,
+    destination: str,
+    time_period: int,
+) -> str:
+    """Convert user backup args to JSON, to then be passed to a write function
+
+    Args:
+        name: name for the unique backup
+        max_backup_size: maximum backup size
+        path: path to back up
+        name_format: naming scheme to follow
+        destination: path in whic backups are stored
+        time_period: time period in seconds
+
+    Output:
+        (str) JSON-formatted object representing user args, ready to be written
+    """
+    #  all args have gone through the parsers first
+    #  so no type checking required
+    args_json = json.dumps(
+        {
+            "name": name,
+            "max_backup_size": max_backup_size,
+            "path": path,
+            "name_format": name_format,
+            "destination": destination,
+            "time_period": time_period,
+            "last_known_backup": None,
+            "total_backup_count": 0,
+            "status": "active",
+        }
+    )
+    logging.info("Converted user args to JSON")
+    return args_json
 
 
 if __name__ == "__main__":

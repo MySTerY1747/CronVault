@@ -84,6 +84,11 @@ if __name__ == "__main__":
         args.name = get_default_backup_name(args.path)
         logging.info(f"Backup name now set to {args.name}")
 
+    if args.naming_format == NAME_DEFAULT:
+        logging.info("No naming format specified. Setting it based on name")
+        args.naming_format = f"{args.name} %Y-%m-%M"
+        logging.info(f"Backup naming scheme now set to {args.naming_format}")
+
     # TODO: create function to write CLI args to JSON file in ~/.config/CronVault/{name}.json
     # TODO: function to actually perform the backup
     # TODO: add cron job for each backup; maybe identify it with a comment
