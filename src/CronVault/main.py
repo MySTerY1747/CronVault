@@ -11,6 +11,7 @@ from utils.utils import (
     parse_path,
     parse_name_format,
     get_default_backup_name,
+    parse_time_period,
 )
 
 NAME_DEFAULT: str = "NoName"
@@ -63,7 +64,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-t",
         "--time-period",
-        type=parse_name_format,
+        type=parse_time_period,
         help='Time period between backups. Uses natural syntax: "5 days", "15d10h", "1w 3d 2h 32m", "172 hours", etc.',
         required=True,
     )
