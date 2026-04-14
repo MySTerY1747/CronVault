@@ -169,5 +169,37 @@ def convert_user_args_json(
     return args_json
 
 
+def get_config_path(base_path: Path, name: str) -> Path:
+    """Takes a base config path, ensures it exists, and that the file `{base_path}/{name}.json` is not already present
+
+    Args:
+        base_path: `Path` the initial path to which the name is added
+        name: `str` the name of the file that will be stored
+
+    Returns:
+        `Path` the path to write the data (if successful). Otherwise raises an error
+    """
+    if not (base_path.is_dir()):
+        base_path.mkdir()
+
+    file_path: Path = base_path / f"{name}.json"
+    if file_path.exists():
+        logging.error(f"File {file_path} already exists.")
+        raise ValueError(f"File {file_path} already exists.")
+
+    return file_path
+
+
+def write_file(file_path: Path, contents: str) -> None:
+    try:
+        with open(file_path, "w") as f:
+            f.write(contents)
+    except OSError as e:
+        logging.exception(f"Error writing file {file_path}: {e}")
+        raise OSError(f"Error writing file {file_path}: {e}")
+
+    logging.info(f"File {file_path} successfully written")
+
+
 if __name__ == "__main__":
     pass

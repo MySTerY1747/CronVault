@@ -5,6 +5,7 @@ from json import dumps, dump
 import os
 import CronVault.utils.utils
 import pytest
+from pathlib import Path
 
 
 def test_help():
@@ -253,3 +254,35 @@ def test_convert_args_json():
     expected_output = dumps(output_dict)
 
     assert CronVault.utils.utils.convert_user_args_json(**input_dict) == expected_output
+
+
+def test_config_path(tmp_path):
+    result = CronVault.utils.utils.get_config_path(tmp_path, "myconfig")
+
+    assert result == tmp_path / "myconfig.json"
+
+
+def test_config_path_raises_when_file_exists(tmp_path):
+    existing_file: Path = tmp_path / "test.json"
+    existing_file.write_text("this file exists already")
+
+    with pytest.raises(ValueError):
+        CronVault.utils.utils.get_config_path(tmp_path, "test")
+
+
+def test_config_path_dir_missing(tmp_path):
+    new_dir: Path = tmp_path / "configs"
+
+    result = CronVault.utils.utils.get_config_path(new_dir, "test")
+
+    assert new_dir.exists()
+    assert result == new_dir / "test.json"
+
+
+def test_write_file_writes_contents(tmp_path):
+    file_path = tmp_path / "output.json"
+
+    CronVault.utils.utils.write_file(file_path, '{"a": 1}')
+
+    assert file_path.exists()
+    assert file_path.read_text() == '{"a": 1}'

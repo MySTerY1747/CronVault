@@ -89,7 +89,7 @@ if __name__ == "__main__":
         args.naming_format = f"{args.name} %Y-%m-%M"
         logging.info(f"Backup naming scheme now set to {args.naming_format}")
 
-    # TODO: create function to write CLI args to JSON file in ~/.config/CronVault/{name}.json
+    # TODO: create function to write CLI args to JSON file in ~/.config/CronVault/{name}.json --> Refactor into two separate functions. One to verify the path, and one to just write
     # TODO: function to actually perform the backup
     # TODO: add cron job for each backup; maybe identify it with a comment
     # TODO: add watchdog cron job on startup, and create associated function
