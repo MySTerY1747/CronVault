@@ -21,8 +21,6 @@ def test_cli_args():
     options: list[str] = [
         "-h",
         "--help",
-        "-v",
-        "--verbose",
         "-n",
         "--name",
         "-m",
@@ -36,7 +34,7 @@ def test_cli_args():
         "-t",
         "--time-period",
     ]
-    help_command: str = "python3 src/CronVault/main.py -h"
+    help_command: str = "python3 src/CronVault/main.py create -h"
     result: str = os.popen(help_command).read()
     for option in options:
         assert option in result.lower()
