@@ -25,35 +25,37 @@ if __name__ == "__main__":
     parser.add_argument(
         "-v", "--verbose", action="store_true", help="increase logging verbosity"
     )
-    parser.add_argument(
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    parser_create = subparsers.add_parser("create", help="Create new backup configs")
+    parser_create.add_argument(
         "-n",
         "--name",
         type=parse_name,
         default=NAME_DEFAULT,
         help="Unique name to identify this backup",
     )
-    parser.add_argument(
+    parser_create.add_argument(
         "-m",
         "--max-backup-size",
         type=parse_size,
         help="Maximum total size of backups before overwriting old ones (e.g. 10MB, 4GB, 500K)",
         default=FIFTY_GB,
     )
-    parser.add_argument(
+    parser_create.add_argument(
         "-p",
         "--path",
         type=parse_path,
         help="Specifies the directory path to back up",
         required=True,
     )
-    parser.add_argument(
+    parser_create.add_argument(
         "-d",
         "--destination",
         type=parse_path,
         help="Specifies the destination directory where backups will be stored",
         required=True,
     )
-    parser.add_argument(
+    parser_create.add_argument(
         "-f",
         "--naming-format",
         type=parse_name_format,
@@ -61,7 +63,7 @@ if __name__ == "__main__":
         required=False,
         default=NAME_DEFAULT,
     )
-    parser.add_argument(
+    parser_create.add_argument(
         "-t",
         "--time-period",
         type=parse_time_period,
@@ -79,18 +81,20 @@ if __name__ == "__main__":
     logging.info("Checking command-line arguments")
     logging.info(args)
 
-    if args.name == NAME_DEFAULT:
-        logging.info("No name specified. Setting it based on directory")
-        args.name = get_default_backup_name(args.path)
-        logging.info(f"Backup name now set to {args.name}")
+    print(args)
 
-    if args.naming_format == NAME_DEFAULT:
-        logging.info("No naming format specified. Setting it based on name")
-        args.naming_format = f"{args.name} %Y-%m-%M"
-        logging.info(f"Backup naming scheme now set to {args.naming_format}")
+    if args.command == "create":
+        if args.name == NAME_DEFAULT:
+            logging.info("No name specified. Setting it based on directory")
+            args.name = get_default_backup_name(args.path)
+            logging.info(f"Backup name now set to {args.name}")
 
-    # TODO: create function to write CLI args to JSON file in ~/.config/CronVault/{name}.json --> Refactor into two separate functions. One to verify the path, and one to just write
+        if args.naming_format == NAME_DEFAULT:
+            logging.info("No naming format specified. Setting it based on name")
+            args.naming_format = f"{args.name} %Y-%m-%M"
+            logging.info(f"Backup naming scheme now set to {args.naming_format}")
+
+    # TODO: Change parser logic to support the different commands:
     # TODO: function to actually perform the backup
-    # TODO: add cron job for each backup; maybe identify it with a comment
     # TODO: add watchdog cron job on startup, and create associated function
     # TODO: add functions to list, deactivate (stop), activate (start), remove, and manually run backup jobs
