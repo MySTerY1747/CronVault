@@ -4,8 +4,10 @@
 import logging
 import argparse
 from logging import Logger
+from typing import Callable
 
 from utils.utils import (
+    convert_user_args_json,
     get_config_path,
     parse_name,
     parse_size,
@@ -13,6 +15,7 @@ from utils.utils import (
     parse_name_format,
     get_default_backup_name,
     parse_time_period,
+    write_file,
 )
 
 NAME_DEFAULT: str = "NoName"
@@ -94,8 +97,17 @@ if __name__ == "__main__":
             logging.info(f"Backup naming scheme now set to {args.naming_format}")
 
         file_path = get_config_path(args.name)
+        contents = convert_user_args_json(
+            args.name,
+            args.max_backup_size,
+            args.path,
+            args.naming_format,
+            args.destination,
+            args.time_period,
+        )  #  change this to use dictionary unpacking in the future
+        write_file(file_path, contents)
 
-    handle_functions = {
+    handle_functions: dict[str | None, Callable] = {
         "create": handle_create,
         None: exit,
     }

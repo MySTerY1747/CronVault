@@ -67,7 +67,7 @@ def parse_path(folder_path: str) -> str:
         logging.exception(f"Invalid path: {folder_path}")
         raise OSError(f"Invalid path: {folder_path}")
 
-    if os.path.exists(folder_path):
+    if os.path.exists(os.path.expanduser(folder_path)):
         return folder_path
     else:
         logging.exception(f"Path not found: {folder_path}")
@@ -179,6 +179,7 @@ def get_config_path(name: str, base_path: Path = Path(CONFIG_LOCATION)) -> Path:
     Returns:
         `Path` the path to write the data (if successful). Otherwise raises an error
     """
+    base_path = base_path.expanduser()
     if not (base_path.is_dir()):
         base_path.mkdir()
 
