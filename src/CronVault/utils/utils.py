@@ -169,12 +169,12 @@ def convert_user_args_json(
     return args_json
 
 
-def get_config_path(base_path: Path, name: str) -> Path:
-    """Takes a base config path, ensures it exists, and that the file `{base_path}/{name}.json` is not already present
+def get_config_path(name: str, base_path: Path = Path(CONFIG_LOCATION)) -> Path:
+    """Takes an optional base config path (default is `~/.config/CronVault/`), ensures it exists, and that the file `{base_path}/{name}.json` is not already present
 
     Args:
-        base_path: `Path` the initial path to which the name is added
         name: `str` the name of the file that will be stored
+        base_path: `Path` the initial path to which the name is added. Default is `~/.config/CronVault/`
 
     Returns:
         `Path` the path to write the data (if successful). Otherwise raises an error

@@ -6,6 +6,7 @@ import argparse
 from logging import Logger
 
 from utils.utils import (
+    get_config_path,
     parse_name,
     parse_size,
     parse_path,
@@ -81,9 +82,7 @@ if __name__ == "__main__":
     logging.info("Checking command-line arguments")
     logging.info(args)
 
-    print(args)
-
-    if args.command == "create":
+    def handle_create():
         if args.name == NAME_DEFAULT:
             logging.info("No name specified. Setting it based on directory")
             args.name = get_default_backup_name(args.path)
@@ -94,7 +93,16 @@ if __name__ == "__main__":
             args.naming_format = f"{args.name} %Y-%m-%M"
             logging.info(f"Backup naming scheme now set to {args.naming_format}")
 
-    # TODO: Change parser logic to support the different commands:
+        file_path = get_config_path(args.name)
+
+    handle_functions = {
+        "create": handle_create,
+        None: exit,
+    }
+
+    handle_functions[args.command]()
+
+    # TODO: Change parser logic to support the different commands: create, list, backup, activate, deactivate
     # TODO: function to actually perform the backup
     # TODO: add watchdog cron job on startup, and create associated function
     # TODO: add functions to list, deactivate (stop), activate (start), remove, and manually run backup jobs

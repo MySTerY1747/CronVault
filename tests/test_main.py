@@ -255,7 +255,7 @@ def test_convert_args_json():
 
 
 def test_config_path(tmp_path):
-    result = CronVault.utils.utils.get_config_path(tmp_path, "myconfig")
+    result = CronVault.utils.utils.get_config_path("myconfig", tmp_path)
 
     assert result == tmp_path / "myconfig.json"
 
@@ -265,13 +265,13 @@ def test_config_path_raises_when_file_exists(tmp_path):
     existing_file.write_text("this file exists already")
 
     with pytest.raises(ValueError):
-        CronVault.utils.utils.get_config_path(tmp_path, "test")
+        CronVault.utils.utils.get_config_path("test", tmp_path)
 
 
 def test_config_path_dir_missing(tmp_path):
     new_dir: Path = tmp_path / "configs"
 
-    result = CronVault.utils.utils.get_config_path(new_dir, "test")
+    result = CronVault.utils.utils.get_config_path("test", new_dir)
 
     assert new_dir.exists()
     assert result == new_dir / "test.json"
