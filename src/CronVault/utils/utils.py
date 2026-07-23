@@ -8,6 +8,10 @@ import logging
 from datetime import datetime
 import pytimeparse
 from pathlib import Path
+from typing import Any
+from glob import glob
+import colorama
+from colorama import Fore
 
 CONFIG_LOCATION: str = "~/.config/CronVault/"
 MAX_NAME_ATTEMPTS: int = 101
@@ -31,7 +35,7 @@ def parse_name(name: str) -> str:
         return name
     except (OSError, FileNotFoundError) as e:
         logging.exception(f"Issue finding config folder: {e}")
-    raise (OSError)
+        raise (OSError)
 
 
 def parse_size(value: str) -> int:
@@ -200,6 +204,58 @@ def write_file(file_path: Path, contents: str) -> None:
         raise OSError(f"Error writing file {file_path}: {e}")
 
     logging.info(f"File {file_path} successfully written")
+
+
+# TODO: need function to collect all .json files from `~/.config/CronVault`, filter by active (maybe separate func?), store results probably in just a list of strings/objects, and one more func to format/print results?
+
+
+def get_all_backups(file_path: str = CONFIG_LOCATION) -> list[dict[str, Any]]:
+    configs: list[dict[str, Any]] = []
+
+    try:
+        filenames = glob(os.path.expanduser(file_path + "*.json"))
+
+        #  look into paralelizing for loop in the future
+        logging.info("Iterating through list of config files")
+        for config in filenames:
+            logging.info(f"Opening file {config}")
+            with open(config) as f:
+                try:
+                    configs.append(json.load(f))
+                    #  TODO: Add assert for some JSON schema
+                except json.JSONDecodeError as e:
+                    logging.exception(
+                        f"Error with config file {config} when trying to read JSON: {e}. Skipping file"
+                    )
+                    continue
+
+    except OSError as e:
+        logging.exception(f"Error when trying to read file: {e}")
+        raise (e)
+
+    return configs
+
+
+def filter_configs_active(configs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """WARNING: Modifies the configs list passed in"""
+    logging.info("Filtering through configs to get active ones")
+    for config in configs:
+        if config.get("status", None) != "active":
+            configs.remove(config)
+
+    return configs
+
+
+def print_configs(configs: list[dict[str, Any]]) -> None:
+    """Prints all active configs with proper highlighting and color support"""
+    colorama.init(autoreset=True)
+    logging.info("Printing configs")
+
+    print("CONFIGS: \n")
+    for config in configs:
+        print(f"• {config['name']}: ", end="")
+        is_active: bool = config["status"] == "active"
+        print((Fore.GREEN if is_active else Fore.RED) + f"{config['status']}")
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ from typing import Callable
 
 from utils.utils import (
     convert_user_args_json,
+    get_all_backups,
     get_config_path,
     parse_name,
     parse_size,
@@ -15,7 +16,9 @@ from utils.utils import (
     parse_name_format,
     get_default_backup_name,
     parse_time_period,
+    print_configs,
     write_file,
+    filter_configs_active,
 )
 
 NAME_DEFAULT: str = "NoName"
@@ -30,6 +33,7 @@ if __name__ == "__main__":
         "-v", "--verbose", action="store_true", help="increase logging verbosity"
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+    parser_list = subparsers.add_parser("list", help="List configs")
     parser_create = subparsers.add_parser("create", help="Create new backup configs")
     parser_create.add_argument(
         "-n",
@@ -80,6 +84,7 @@ if __name__ == "__main__":
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
     )
+
     LOGGER: Logger = logging.getLogger()
     logging.info("Finished parsing command-line arguments")
     logging.info("Checking command-line arguments")
@@ -106,15 +111,21 @@ if __name__ == "__main__":
             args.time_period,
         )  #  change this to use dictionary unpacking in the future
         write_file(file_path, contents)
+        logging.info("Successfully wrote backup configuration file")
+
+    def handle_list():
+        print_configs(filter_configs_active(get_all_backups()))
 
     handle_functions: dict[str | None, Callable] = {
         "create": handle_create,
+        "list": handle_list,
         None: exit,
     }
 
     handle_functions[args.command]()
 
-    # TODO: Change parser logic to support the different commands: create, list, backup, activate, deactivate
+    # TODO: Add integration test for `create`
+    # TODO: Change parser logic to support the different commands: create ✅, list, backup, activate, deactivate
     # TODO: function to actually perform the backup
     # TODO: add watchdog cron job on startup, and create associated function
     # TODO: add functions to list, deactivate (stop), activate (start), remove, and manually run backup jobs
