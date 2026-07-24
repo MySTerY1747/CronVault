@@ -340,14 +340,39 @@ def test_activate_inactive_file(populated_config_directory):
     )
 
 
+def test_activate_active_file(populated_config_directory):
+    write_test_tmp_path = populated_config_directory
+    #  documents should already be active, testing for idempotency
+    CronVault.utils.utils.change_backup_status(
+        "documents", "active", write_test_tmp_path
+    )
+    assert (
+        loads((write_test_tmp_path / "documents.json").read_text())["status"]
+        == "active"
+    )
+
+
 def test_deactivate_active_file(populated_config_directory):
     write_test_tmp_path = populated_config_directory
     CronVault.utils.utils.change_backup_status(
         "documents", "inactive", write_test_tmp_path
     )
+    #  main assert
     assert (
-        loads((write_test_tmp_path / "photos.json").read_text())["status"] == "inactive"
+        loads((write_test_tmp_path / "documents.json").read_text())["status"]
+        == "inactive"
     )
+    #  test that other files remain unchanged
+    for name, status in (
+        ("photos", "inactive"),
+        ("projects", "active"),
+        ("music", "inactive"),
+        ("notes", "active"),
+    ):
+        assert (
+            loads((write_test_tmp_path / f"{name}.json").read_text())["status"]
+            == status
+        )
 
 
 def test_activate_missing_file(tmp_path):
