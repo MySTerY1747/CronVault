@@ -291,12 +291,14 @@ def test_filter_active(generate_test_configs):
     configs = generate_test_configs
     active = CronVault.utils.utils.filter_configs_active(configs)
     assert len(active) == 3
+    assert all(config["status"] == "active" for config in active)
 
 
 def test_filter_inactive(generate_test_configs):
     configs = generate_test_configs
     inactive = CronVault.utils.utils.filter_configs_inactive(configs)
     assert len(inactive) == 2
+    assert all(config["status"] == "inactive" for config in inactive)
 
 
 def test_print_configs(generate_test_configs, capsys):
@@ -310,17 +312,22 @@ def test_print_configs(generate_test_configs, capsys):
         "• music",
         "• projects",
         "• notes",
+        "active",
+        "inactive",
     ]:
         assert text in captured.out
 
 
-def test_get_backups(generate_test_configs, tmp_path):
+def test_get_all_backups_skips_invalid_json_files(generate_test_configs, tmp_path):
     configs = generate_test_configs
     for config in configs:
         (tmp_path / f"{config['name']}.json").write_text(dumps(config))
     (tmp_path / "broken.json").write_text("This is an invalid JSON file")
+    invalid_structure = {"name": "photos"}
+    (tmp_path / "invalid_structure.json").write_text(dumps(invalid_structure))
 
     config_results = CronVault.utils.utils.get_all_backups(file_path=tmp_path)
     for config in configs:
         assert config in config_results
     assert len(config_results) == 5
+    assert "broken" not in [config["name"] for config in config_results]

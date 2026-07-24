@@ -1,5 +1,5 @@
-#  test_utils
-#  utility functions for testing
+#  conftest.py
+#  Shared pytest fixtures
 import pytest
 
 
