@@ -13,7 +13,7 @@ from glob import glob
 import colorama
 from colorama import Fore, Style
 from jsonschema import ValidationError, validate
-from utils.json_schema import SCHEMA
+from .json_schema import SCHEMA
 
 CONFIG_LOCATION: str = "~/.config/CronVault/"
 MAX_NAME_ATTEMPTS: int = 101
