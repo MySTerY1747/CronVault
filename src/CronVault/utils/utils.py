@@ -275,8 +275,8 @@ def change_backup_status(
     name: str, status: str, file_path: Path = Path(CONFIG_LOCATION).expanduser()
 ) -> None:
     if status not in ("active", "inactive"):
-        logging.error(f"{status} is not a valid config status. Exiting")
-        exit()
+        logging.error(f'"{status}" is not a valid config status. Exiting')
+        return
     logging.info(f"Changing activity status of config {name} to {status}")
 
     file_path = file_path / f"{name}.json"
@@ -289,7 +289,6 @@ def change_backup_status(
             logging.info("Successfully changed file contents")
         else:
             logging.error(f"No such config found: {name}. Exiting")
-            exit()
     except (json.JSONDecodeError, ValidationError) as e:
         logging.error(
             f'Config file "{name}" is malformed or corrupted. View details with --verbose'
