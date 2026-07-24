@@ -9,8 +9,6 @@ from datetime import datetime
 import pytimeparse
 from pathlib import Path
 from typing import Any
-from glob import glob
-import colorama
 from colorama import Fore, Style
 from jsonschema import ValidationError, validate
 from .json_schema import SCHEMA
@@ -37,7 +35,7 @@ def parse_name(name: str) -> str:
         return name
     except (OSError, FileNotFoundError) as e:
         logging.exception(f"Issue finding config folder: {e}")
-        raise (OSError)
+        raise
 
 
 def parse_size(value: str) -> int:
@@ -211,11 +209,11 @@ def write_file(file_path: Path, contents: str) -> None:
 # TODO: need function to collect all .json files from `~/.config/CronVault`, filter by active (maybe separate func?), store results probably in just a list of strings/objects, and one more func to format/print results?
 
 
-def get_all_backups(file_path: str = CONFIG_LOCATION) -> list[dict[str, Any]]:
+def get_all_backups(file_path: Path = Path(CONFIG_LOCATION)) -> list[dict[str, Any]]:
     configs: list[dict[str, Any]] = []
 
     try:
-        filenames = glob(os.path.expanduser(file_path + "*.json"))
+        filenames = file_path.expanduser().glob("*.json")
 
         #  look into paralelizing for loop in the future
         logging.info("Iterating through list of config files")
@@ -235,7 +233,7 @@ def get_all_backups(file_path: str = CONFIG_LOCATION) -> list[dict[str, Any]]:
 
     except OSError as e:
         logging.exception(f"Error when trying to read file: {e}")
-        raise (e)
+        raise
 
     return configs
 
@@ -264,13 +262,12 @@ def filter_configs_inactive(configs: list[dict[str, Any]]) -> list[dict[str, Any
 
 def print_configs(configs: list[dict[str, Any]]) -> None:
     """Prints all active configs with proper highlighting and color support"""
-    colorama.init(autoreset=True)
     logging.info("Printing configs")
 
     print(Fore.CYAN + Style.BRIGHT + "CONFIGS:")
     print("=" * 40 + "\n")
 
-    max_width = max([len(config["name"]) for config in configs])
+    max_width = max(len(config["name"]) for config in configs)
     for config in configs:
         is_active: bool = config["status"] == "active"
         print(f"• {config['name']:<{max_width}}: ", end="")

@@ -21,12 +21,15 @@ from utils.utils import (
     filter_configs_active,
     filter_configs_inactive,
 )
+import colorama
 
 NAME_DEFAULT: str = "NoName"
 
 FIFTY_GB: int = 53_687_091_200  #  50GB
 
 if __name__ == "__main__":
+    colorama.init(autoreset=True)
+
     parser = argparse.ArgumentParser(
         description="CronVault - Flexible Python-based backup automation tool via cron jobs"
     )
