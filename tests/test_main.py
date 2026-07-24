@@ -1,7 +1,7 @@
 #  conftest.py
 #  unit tests for main function of the program
 
-from json import dumps
+from json import dumps, loads
 import os
 
 import CronVault.utils.utils
@@ -318,16 +318,64 @@ def test_print_configs(generate_test_configs, capsys):
         assert text in captured.out
 
 
-def test_get_all_backups_skips_invalid_json_files(generate_test_configs, tmp_path):
+def test_get_all_backups_skips_invalid_json_files(
+    generate_test_configs, populated_config_directory
+):
     configs = generate_test_configs
-    for config in configs:
-        (tmp_path / f"{config['name']}.json").write_text(dumps(config))
-    (tmp_path / "broken.json").write_text("This is an invalid JSON file")
-    invalid_structure = {"name": "photos"}
-    (tmp_path / "invalid_structure.json").write_text(dumps(invalid_structure))
-
-    config_results = CronVault.utils.utils.get_all_backups(file_path=tmp_path)
+    write_test_tmp_path: Path = populated_config_directory
+    config_results = CronVault.utils.utils.get_all_backups(
+        file_path=write_test_tmp_path
+    )
     for config in configs:
         assert config in config_results
     assert len(config_results) == 5
     assert "broken" not in [config["name"] for config in config_results]
+
+
+def test_activate_inactive_file(populated_config_directory):
+    write_test_tmp_path = populated_config_directory
+    CronVault.utils.utils.change_backup_status("photos", "active", write_test_tmp_path)
+    assert (
+        loads((write_test_tmp_path / "photos.json").read_text())["status"] == "active"
+    )
+
+
+def test_deactivate_active_file(populated_config_directory):
+    write_test_tmp_path = populated_config_directory
+    CronVault.utils.utils.change_backup_status(
+        "documents", "inactive", write_test_tmp_path
+    )
+    assert (
+        loads((write_test_tmp_path / "photos.json").read_text())["status"] == "inactive"
+    )
+
+
+def test_activate_missing_file(tmp_path):
+    assert (
+        CronVault.utils.utils.change_backup_status(
+            "non_existent_config", "active", tmp_path
+        )
+        is None
+    )
+    #  exited without crashing
+
+
+def test_change_status_broken_file(populated_config_directory, caplog):
+    write_test_tmp_path = populated_config_directory
+    CronVault.utils.utils.change_backup_status("broken", "active", write_test_tmp_path)
+    assert 'Config file "broken" is malformed or corrupted.' in caplog.text
+
+
+def test_change_status_invalid_file(populated_config_directory, caplog):
+    write_test_tmp_path = populated_config_directory
+    CronVault.utils.utils.change_backup_status(
+        "invalid_structure", "active", write_test_tmp_path
+    )
+    assert 'Config file "invalid_structure" is malformed or corrupted.' in caplog.text
+
+
+def test_change_status_to_invalid_state(tmp_path, caplog):
+    CronVault.utils.utils.change_backup_status(
+        "non_existent_config", "wrong_value", tmp_path
+    )
+    assert '"wrong_value" is not a valid config status. Exiting' in caplog.text

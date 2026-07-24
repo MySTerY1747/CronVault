@@ -1,6 +1,8 @@
 #  conftest.py
 #  Shared pytest fixtures
 import pytest
+from json import dumps
+from pathlib import Path
 
 
 @pytest.fixture
@@ -62,3 +64,20 @@ def generate_test_configs() -> list[dict[str, object]]:
             "status": "active",
         },
     ]
+
+
+@pytest.fixture
+def populated_config_directory(generate_test_configs, tmp_path) -> Path:
+    """
+    Writes to `tmp_path`:
+    - 5 valid config files (3 active, 2 inactive)
+    - 1 invalid JSON file
+    - 1 valid JSON file with incorrect structure
+    """
+    configs = generate_test_configs
+    for config in configs:
+        (tmp_path / f"{config['name']}.json").write_text(dumps(config))
+    (tmp_path / "broken.json").write_text("This is an invalid JSON file")
+    invalid_structure = {"name": "photos"}
+    (tmp_path / "invalid_structure.json").write_text(dumps(invalid_structure))
+    return tmp_path
