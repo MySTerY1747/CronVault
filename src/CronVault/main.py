@@ -7,6 +7,7 @@ from logging import Logger
 from typing import Callable
 
 from utils.utils import (
+    change_backup_status,
     convert_user_args_json,
     get_all_backups,
     get_config_path,
@@ -48,6 +49,14 @@ if __name__ == "__main__":
         action="store_true",
         help="Only list inactive backup configs",
     )
+    parser_activate = subparsers.add_parser(
+        "activate", help="Activate a backup config file"
+    )
+    parser_activate.add_argument("name", type=str)
+    parser_deactivate = subparsers.add_parser(
+        "deactivate", help="Deactivate a backup config file"
+    )
+    parser_deactivate.add_argument("name", type=str)
     parser_create = subparsers.add_parser("create", help="Create new backup configs")
     parser_create.add_argument(
         "-n",
@@ -136,9 +145,17 @@ if __name__ == "__main__":
 
         print_configs(backup_configs)
 
+    def handle_activate():
+        change_backup_status(args.name, "active")
+
+    def handle_deactivate():
+        change_backup_status(args.name, "inactive")
+
     handler_functions: dict[str | None, Callable] = {
         "create": handle_create,
         "list": handle_list,
+        "activate": handle_activate,
+        "deactivate": handle_deactivate,
         None: exit,
     }
 
@@ -147,7 +164,7 @@ if __name__ == "__main__":
     logging.info("Handler function complete. Exiting...")
 
     # TODO: Add integration test for `create`
-    # TODO: Change parser logic to support the different commands: create ✅, list ✅, backup, activate, deactivate
+    # TODO: Change parser logic to support the different commands: create ✅, list ✅, backup, activate, deactivate, delete
     # TODO: function to actually perform the backup
     # TODO: add watchdog cron job on startup, and create associated function
     # TODO: add functions to list, deactivate (stop), activate (start), remove, and manually run backup jobs

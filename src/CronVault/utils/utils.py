@@ -271,5 +271,31 @@ def print_configs(configs: list[dict[str, Any]]) -> None:
         print((Fore.GREEN if is_active else Fore.RED) + f"{config['status']}")
 
 
+def change_backup_status(
+    name: str, status: str, file_path: Path = Path(CONFIG_LOCATION).expanduser()
+) -> None:
+    logging.info(f"Changing activity status of config {name} to {status}")
+
+    file_path = file_path / f"{name}.json"
+    try:
+        if file_path.exists:
+            config = json.loads(file_path.read_text())
+            validate(instance=config, schema=SCHEMA)
+            config["status"] = status
+            file_path.write_text(json.dumps(config))
+            logging.info("Successfully changed file contents")
+        else:
+            logging.error(f"No such config found: {name}. Exiting")
+            exit()
+    except (json.JSONDecodeError, ValidationError) as e:
+        logging.error(
+            f'Config file "{name}" is malformed or corrupted. View details with --verbose'
+        )
+        logging.info(e)
+    except IOError:
+        logging.error(f"Encountered IOError while trying to edit config file {name}")
+        raise
+
+
 if __name__ == "__main__":
     pass
