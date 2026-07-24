@@ -1,8 +1,9 @@
-#  test_main.py
+#  conftest.py
 #  unit tests for main function of the program
 
-from json import dumps, dump
+from json import dumps
 import os
+
 import CronVault.utils.utils
 import pytest
 from pathlib import Path
@@ -284,3 +285,42 @@ def test_write_file_writes_contents(tmp_path):
 
     assert file_path.exists()
     assert file_path.read_text() == '{"a": 1}'
+
+
+def test_filter_active(generate_test_configs):
+    configs = generate_test_configs
+    active = CronVault.utils.utils.filter_configs_active(configs)
+    assert len(active) == 3
+
+
+def test_filter_inactive(generate_test_configs):
+    configs = generate_test_configs
+    inactive = CronVault.utils.utils.filter_configs_inactive(configs)
+    assert len(inactive) == 2
+
+
+def test_print_configs(generate_test_configs, capsys):
+    configs = generate_test_configs
+    CronVault.utils.utils.print_configs(configs)
+    captured = capsys.readouterr()
+    for text in [
+        "CONFIGS:",
+        "• documents",
+        "• photos",
+        "• music",
+        "• projects",
+        "• notes",
+    ]:
+        assert text in captured.out
+
+
+def test_get_backups(generate_test_configs, tmp_path):
+    configs = generate_test_configs
+    for config in configs:
+        (tmp_path / f"{config['name']}.json").write_text(dumps(config))
+    (tmp_path / "broken.json").write_text("This is an invalid JSON file")
+
+    config_results = CronVault.utils.utils.get_all_backups(file_path=tmp_path)
+    for config in configs:
+        assert config in config_results
+    assert len(config_results) == 5

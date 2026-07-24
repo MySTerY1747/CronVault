@@ -206,9 +206,6 @@ def write_file(file_path: Path, contents: str) -> None:
     logging.info(f"File {file_path} successfully written")
 
 
-# TODO: need function to collect all .json files from `~/.config/CronVault`, filter by active (maybe separate func?), store results probably in just a list of strings/objects, and one more func to format/print results?
-
-
 def get_all_backups(file_path: Path = Path(CONFIG_LOCATION)) -> list[dict[str, Any]]:
     configs: list[dict[str, Any]] = []
 

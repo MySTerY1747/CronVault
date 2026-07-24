@@ -147,7 +147,7 @@ if __name__ == "__main__":
     logging.info("Handler function complete. Exiting...")
 
     # TODO: Add integration test for `create`
-    # TODO: Change parser logic to support the different commands: create ✅, list, backup, activate, deactivate
+    # TODO: Change parser logic to support the different commands: create ✅, list ✅, backup, activate, deactivate
     # TODO: function to actually perform the backup
     # TODO: add watchdog cron job on startup, and create associated function
     # TODO: add functions to list, deactivate (stop), activate (start), remove, and manually run backup jobs
