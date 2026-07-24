@@ -1,0 +1,37 @@
+#  json_schema.py
+#  holds the schema used to validate JSON config files
+
+SCHEMA = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": False,
+    "required": [
+        "name",
+        "max_backup_size",
+        "path",
+        "name_format",
+        "destination",
+        "time_period",
+        "last_known_backup",
+        "total_backup_count",
+        "status",
+    ],
+    "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "max_backup_size": {"type": "integer", "minimum": 0},
+        "path": {"type": "string", "minLength": 1},
+        "name_format": {"type": "string", "minLength": 1},
+        "destination": {"type": "string", "minLength": 1},
+        "time_period": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Backup interval in seconds.",
+        },
+        "last_known_backup": {
+            "type": ["integer", "null"],
+            "description": "Unix timestamp of the last successful backup, or null if none.",
+        },
+        "total_backup_count": {"type": "integer", "minimum": 0},
+        "status": {"type": "string", "enum": ["inactive", "active"]},
+    },
+}

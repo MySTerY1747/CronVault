@@ -19,6 +19,7 @@ from utils.utils import (
     print_configs,
     write_file,
     filter_configs_active,
+    filter_configs_inactive,
 )
 
 NAME_DEFAULT: str = "NoName"
@@ -34,6 +35,16 @@ if __name__ == "__main__":
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     parser_list = subparsers.add_parser("list", help="List configs")
+    parser_list_group = parser_list.add_mutually_exclusive_group()
+    parser_list_group.add_argument(
+        "-a", "--active", action="store_true", help="Only list active backup configs"
+    )
+    parser_list_group.add_argument(
+        "-i",
+        "--inactive",
+        action="store_true",
+        help="Only list inactive backup configs",
+    )
     parser_create = subparsers.add_parser("create", help="Create new backup configs")
     parser_create.add_argument(
         "-n",
@@ -114,15 +125,23 @@ if __name__ == "__main__":
         logging.info("Successfully wrote backup configuration file")
 
     def handle_list():
-        print_configs(filter_configs_active(get_all_backups()))
+        backup_configs = get_all_backups()
+        if args.active:
+            backup_configs = filter_configs_active(backup_configs)
+        elif args.inactive:
+            backup_configs = filter_configs_inactive(backup_configs)
 
-    handle_functions: dict[str | None, Callable] = {
+        print_configs(backup_configs)
+
+    handler_functions: dict[str | None, Callable] = {
         "create": handle_create,
         "list": handle_list,
         None: exit,
     }
 
-    handle_functions[args.command]()
+    handler_functions[args.command]()
+
+    logging.info("Handler function complete. Exiting...")
 
     # TODO: Add integration test for `create`
     # TODO: Change parser logic to support the different commands: create ✅, list, backup, activate, deactivate

@@ -11,7 +11,9 @@ from pathlib import Path
 from typing import Any
 from glob import glob
 import colorama
-from colorama import Fore
+from colorama import Fore, Style
+from jsonschema import ValidationError, validate
+from utils.json_schema import SCHEMA
 
 CONFIG_LOCATION: str = "~/.config/CronVault/"
 MAX_NAME_ATTEMPTS: int = 101
@@ -221,12 +223,14 @@ def get_all_backups(file_path: str = CONFIG_LOCATION) -> list[dict[str, Any]]:
             logging.info(f"Opening file {config}")
             with open(config) as f:
                 try:
-                    configs.append(json.load(f))
-                    #  TODO: Add assert for some JSON schema
-                except json.JSONDecodeError as e:
-                    logging.exception(
-                        f"Error with config file {config} when trying to read JSON: {e}. Skipping file"
+                    contents = json.load(f)
+                    validate(instance=contents, schema=SCHEMA)
+                    configs.append(contents)
+                except (json.JSONDecodeError, ValidationError) as e:
+                    logging.error(
+                        f"Error with config file {config} when trying to read JSON. Skipping file. For more detail use --verbose"
                     )
+                    logging.info(f"{e}")
                     continue
 
     except OSError as e:
@@ -237,13 +241,25 @@ def get_all_backups(file_path: str = CONFIG_LOCATION) -> list[dict[str, Any]]:
 
 
 def filter_configs_active(configs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """WARNING: Modifies the configs list passed in"""
     logging.info("Filtering through configs to get active ones")
-    for config in configs:
-        if config.get("status", None) != "active":
-            configs.remove(config)
+    filtered_list: list[dict[str, Any]] = []
 
-    return configs
+    for config in configs:
+        if config.get("status", None) == "active":
+            filtered_list.append(config)
+
+    return filtered_list
+
+
+def filter_configs_inactive(configs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    logging.info("Filtering through configs to get inactive ones")
+    filtered_list: list[dict[str, Any]] = []
+
+    for config in configs:
+        if config.get("status", None) == "inactive":
+            filtered_list.append(config)
+
+    return filtered_list
 
 
 def print_configs(configs: list[dict[str, Any]]) -> None:
@@ -251,10 +267,13 @@ def print_configs(configs: list[dict[str, Any]]) -> None:
     colorama.init(autoreset=True)
     logging.info("Printing configs")
 
-    print("CONFIGS: \n")
+    print(Fore.CYAN + Style.BRIGHT + "CONFIGS:")
+    print("=" * 40 + "\n")
+
+    max_width = max([len(config["name"]) for config in configs])
     for config in configs:
-        print(f"• {config['name']}: ", end="")
         is_active: bool = config["status"] == "active"
+        print(f"• {config['name']:<{max_width}}: ", end="")
         print((Fore.GREEN if is_active else Fore.RED) + f"{config['status']}")
 
 
