@@ -274,11 +274,14 @@ def print_configs(configs: list[dict[str, Any]]) -> None:
 def change_backup_status(
     name: str, status: str, file_path: Path = Path(CONFIG_LOCATION).expanduser()
 ) -> None:
+    if status not in ("active", "inactive"):
+        logging.error(f"{status} is not a valid config status. Exiting")
+        exit()
     logging.info(f"Changing activity status of config {name} to {status}")
 
     file_path = file_path / f"{name}.json"
     try:
-        if file_path.exists:
+        if file_path.exists():
             config = json.loads(file_path.read_text())
             validate(instance=config, schema=SCHEMA)
             config["status"] = status
@@ -291,7 +294,7 @@ def change_backup_status(
         logging.error(
             f'Config file "{name}" is malformed or corrupted. View details with --verbose'
         )
-        logging.info(e)
+        logging.debug(e)
     except IOError:
         logging.error(f"Encountered IOError while trying to edit config file {name}")
         raise
