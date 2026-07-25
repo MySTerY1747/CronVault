@@ -410,9 +410,10 @@ def test_delete_backup_config(populated_config_directory):
     initial_file_count = len(list(populated_config_directory.iterdir()))
     CronVault.utils.utils.delete_backup("documents", populated_config_directory)
     assert len(list(populated_config_directory.iterdir())) == initial_file_count - 1
-    dir_filenames = [file.name for file in populated_config_directory.iterdir()]
+    dir_filenames = {file.name for file in populated_config_directory.iterdir()}
     for file in ("photos.json", "projects.json", "music.json", "notes.json"):
         assert file in dir_filenames
+    assert "documents.json" not in dir_filenames
 
 
 def test_delete_missing_backup_config(populated_config_directory, caplog):
