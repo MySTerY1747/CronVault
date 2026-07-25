@@ -9,6 +9,7 @@ from typing import Callable
 from utils.utils import (
     change_backup_status,
     convert_user_args_json,
+    delete_backup,
     get_all_backups,
     get_config_path,
     parse_name,
@@ -57,6 +58,8 @@ if __name__ == "__main__":
         "deactivate", help="Deactivate a backup config file"
     )
     parser_deactivate.add_argument("name", type=str)
+    parser_delete = subparsers.add_parser("delete", help="Delete a backup config file")
+    parser_delete.add_argument("name", type=str)
     parser_create = subparsers.add_parser("create", help="Create new backup configs")
     parser_create.add_argument(
         "-n",
@@ -151,11 +154,15 @@ if __name__ == "__main__":
     def handle_deactivate():
         change_backup_status(args.name, "inactive")
 
+    def handle_delete():
+        delete_backup(args.name)
+
     handler_functions: dict[str | None, Callable] = {
         "create": handle_create,
         "list": handle_list,
         "activate": handle_activate,
         "deactivate": handle_deactivate,
+        "delete": handle_delete,
         None: exit,
     }
 
