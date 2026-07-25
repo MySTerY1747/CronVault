@@ -302,7 +302,7 @@ def change_backup_status(
 def delete_backup(
     name: str, file_path: Path = Path(CONFIG_LOCATION).expanduser()
 ) -> None:
-    logging.info(f'Deleting backup "{name}"')
+    logging.info(f'Attempting to delete backup "{name}"')
     file_path = file_path / f"{name}.json"
     try:
         if file_path.exists():
@@ -310,7 +310,7 @@ def delete_backup(
             logging.info("Successfully deleted file")
         else:
             logging.error(f"No such config found: {name}. Exiting")
-    except IOError:
+    except OSError:
         logging.error(f"Encountered IOError while trying to delete config file {name}")
         raise
 
