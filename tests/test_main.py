@@ -4,11 +4,9 @@
 from json import dumps, loads
 import os
 
-from colorama import init
-
 import CronVault.utils.utils
 import pytest
-from pathlib import Path, PosixPath
+from pathlib import Path
 
 
 def test_help():
@@ -412,22 +410,11 @@ def test_delete_backup_config(populated_config_directory):
     initial_file_count = len(list(populated_config_directory.iterdir()))
     CronVault.utils.utils.delete_backup("documents", populated_config_directory)
     assert len(list(populated_config_directory.iterdir())) == initial_file_count - 1
-    for file in populated_config_directory.iterdir():
-        assert file.name != "documents.json"
+    dir_filenames = [file.name for file in populated_config_directory.iterdir()]
+    for file in ("photos.json", "projects.json", "music.json", "notes.json"):
+        assert file in dir_filenames
 
 
 def test_delete_missing_backup_config(populated_config_directory, caplog):
     CronVault.utils.utils.delete_backup("missing_file", populated_config_directory)
     assert "No such config found" in caplog.text
-
-
-def test_delete_only_deletes_one_file(populated_config_directory):
-    initial_file_count = len(list(populated_config_directory.iterdir()))
-    CronVault.utils.utils.delete_backup("documents", populated_config_directory)
-    assert len(list(populated_config_directory.iterdir())) == initial_file_count - 1
-
-    for filename in ("photos.json", "projects.json", "music.json", "notes.json"):
-        assert filename in map(
-            lambda config_path: config_path.name,
-            list(populated_config_directory.iterdir()),
-        )
