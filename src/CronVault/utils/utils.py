@@ -264,6 +264,8 @@ def print_configs(configs: list[dict[str, Any]]) -> None:
     print(Fore.CYAN + Style.BRIGHT + "CONFIGS:")
     print("=" * 40 + "\n")
 
+    if len(configs) == 0:
+        return
     max_width = max(len(config["name"]) for config in configs)
     for config in configs:
         is_active: bool = config["status"] == "active"
