@@ -19,6 +19,7 @@ from .json_schema import SCHEMA
 CONFIG_LOCATION: str = "~/.config/CronVault/"
 MAX_NAME_ATTEMPTS: int = 101
 MAX_DELETE_OLD_BACKUP_ATTEMPTS: int = 10
+MAX_FAILED_BACKUP_CLEANING_ATTEMPTS: int = 10
 CRONVAULT_MARKER_FILENAME: str = ".cronvault_marker.json"
 
 
@@ -346,20 +347,25 @@ def check_file_for_backup(
             else:
                 previous_backup = datetime.fromisoformat(previous_backup)
 
-            time_period_elapsed = (previous_backup - datetime.now()).seconds >= config[
-                "time_period"
-            ]
+            time_period_elapsed = (
+                datetime.now() - previous_backup
+            ).total_seconds() >= config["time_period"]
 
             is_active: bool = config["status"] == "active"
 
+            was_performed = False
             if skip_checks or (time_period_elapsed and is_active):
-                perform_backup(config)
+                was_performed = perform_backup(config)
 
-            config["last_known_backup"] = datetime.now().isoformat()
-            config["total_backup_count"] += 1
-            file_path.write_text(json.dumps(config))
+            # TODO: Separate out this if statement into a `record_backup` function
+            if was_performed:
+                config["last_known_backup"] = datetime.now().isoformat()
+                config["total_backup_count"] += 1
+                file_path.write_text(json.dumps(config))
 
-            logging.info(f"Successfully backed up {name}, and wrote changes to config")
+                logging.info(
+                    f"Successfully backed up {name}, and wrote changes to config"
+                )
         else:
             logging.error(f"No such config found: {name}. Exiting")
     except (json.JSONDecodeError, ValidationError) as e:
@@ -382,36 +388,38 @@ def find_oldest_backup(file_path: Path) -> Path | None:
         if len(list(file_path.iterdir())) == 0:
             return None
 
-        creation_dates = {
-            subdirectory.stat().st_birthtime: subdirectory
-            for subdirectory in file_path.iterdir()
-        }
+        creation_dates = {}
 
-        while (not result) and creation_dates:
-            oldest_backup_time = min(creation_dates)
-            candidate = creation_dates.get(oldest_backup_time, None)
-            if not candidate:
-                break
-            logging.info(f"Oldest directory in {file_path} is {candidate}")
-            backup_marker = candidate / CRONVAULT_MARKER_FILENAME
-            if not backup_marker.exists():
-                logging.info(f"{candidate} is not a CronVault backup, skipping...")
-                creation_dates.pop(oldest_backup_time)
-                continue
-            result = candidate
+        #  use marker to ensure backup is from CronVault
+        for subdirectory in file_path.iterdir():
+            backup_marker = subdirectory / CRONVAULT_MARKER_FILENAME
+            if backup_marker.exists():
+                #  use recorded timestamp instead of stat().st_birthtime
+                #  to ensure consistency and reliability across OSs
+                backup_date = json.loads(backup_marker.read_text())["backup_datetime"]
+                creation_dates[backup_date] = subdirectory
+
+        if creation_dates:
+            oldest_backup_time = min(
+                creation_dates
+            )  #  should work thanks to ISO format
+            result = creation_dates[oldest_backup_time]
+            logging.info(f"Oldest directory in {file_path} is {result}")
+            return result
 
     except OSError:
         logging.error(f"Error while trying to access backups in {file_path}. Aborting")
         raise
 
+    logging.info(f"Found no CronVault backups in path {file_path}")
     return result
 
 
 def generate_cronvault_marker(folder_path: Path, backup_folder_path: Path) -> str:
     marker = {
-        "original_folder": folder_path,
+        "original_folder": str(folder_path),
         "backup_datetime": datetime.now().isoformat(),
-        "backup_folder_path": backup_folder_path,
+        "backup_folder_path": str(backup_folder_path),
     }
     return json.dumps(marker)
 
@@ -421,7 +429,19 @@ def get_device_free_space(backup_folder_path: Path) -> int:
     return free
 
 
-def perform_backup(config: dict[str, Any], path_override=None) -> None:
+def cleanup_failed_backup(backup_folder_path: Path) -> None:
+    logging.info(f"Attempting to clean failed backup {backup_folder_path}")
+    if not backup_folder_path.exists():
+        return
+    for _ in range(MAX_FAILED_BACKUP_CLEANING_ATTEMPTS):
+        try:
+            send2trash.send2trash(backup_folder_path)
+            return
+        except (OSError, IOError):
+            logging.error("Unable to clean failed backup. Trying again.")
+
+
+def perform_backup(config: dict[str, Any], path_override: Path | None = None) -> bool:
     """config must be valid and already checked"""
     #  in the future, add notification support
     logging.info(f"Performing backup for config {config['name']}")
@@ -432,12 +452,22 @@ def perform_backup(config: dict[str, Any], path_override=None) -> None:
     max_storage_limit = config["max_backup_size"]
 
     try:
+        backup_name = datetime.strftime(datetime.now(), config["name_format"])
+        destination = backup_folder_path / backup_name
+
+        if not pathvalidate.is_valid_filepath(destination, platform="auto"):
+            logging.error(
+                f"Error: filepath {destination} is not valid. Backup cannot be performed. Exiting"
+            )
+            return False
+
+        folder_path_size = get_directory_size(folder_path)
+        free_device_space = get_device_free_space(backup_folder_path)
         for _ in range(MAX_DELETE_OLD_BACKUP_ATTEMPTS):
             exceeds_storage_limit: bool = (
-                get_directory_size(folder_path) + get_directory_size(backup_folder_path)
-            ) > max_storage_limit or get_directory_size(
-                folder_path
-            ) > get_device_free_space(backup_folder_path)
+                folder_path_size + get_directory_size(backup_folder_path)
+                #  backup folder size should be checked on every iteration, as we are sending to trash
+            ) > max_storage_limit or (folder_path_size > free_device_space)
             if not exceeds_storage_limit:
                 logging.info("Enough space to perform backup. Proceeding.")
                 break
@@ -447,7 +477,7 @@ def perform_backup(config: dict[str, Any], path_override=None) -> None:
                 logging.error(
                     f"Not enough space in {backup_folder_path} to back up {folder_path}. Exiting"
                 )
-                return
+                return False
 
             #  probably smarter idea to send backup to trash than immediately delete
             logging.info(
@@ -461,16 +491,11 @@ def perform_backup(config: dict[str, Any], path_override=None) -> None:
             logging.error(
                 "Reached maximum number of older backup deletion attempts. User intervention requried."
             )
-            return
+            return False
 
-        backup_name = datetime.strftime(datetime.now(), config["name_format"])
-        destination = backup_folder_path / backup_name
-
-        if not pathvalidate.is_valid_filepath(destination, platform="auto"):
-            logging.error(
-                f"Error: filepath {destination} is not valid. Backup cannot be performed. Exiting"
-            )
-            return
+        if destination.exists():
+            logging.error(f"Destination path {destination} already exists. Aborting...")
+            return False
 
         destination.mkdir()
 
@@ -483,10 +508,18 @@ def perform_backup(config: dict[str, Any], path_override=None) -> None:
             generate_cronvault_marker(folder_path, backup_folder_path)
         )
         logging.info(f"Wrote CronVault marker to {cronvault_marker}")
+        return True
+    except PermissionError as e:
+        logging.error(
+            f"WARNING: Certain files were skipped due to permission errors {e}"
+        )
     except OSError:
         logging.error("Encountered OSError while performing backup. Aborting...")
-        #  maybe add cleanup function?
+        cleanup_failed_backup(backup_folder_path)
         raise
+
+    #  path should be unreachable
+    return False
 
 
 if __name__ == "__main__":
