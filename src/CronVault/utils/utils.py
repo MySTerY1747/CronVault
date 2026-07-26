@@ -535,9 +535,7 @@ def perform_backup(config: dict[str, Any], path_override: Path | None = None) ->
             cleanup_failed_backup(destination)
         return False
     except OSError as e:
-        logging.error(
-            f"Encountered OSError while performing backup. Aborting... \n\n {e}"
-        )
+        logging.error(f"Encountered OSError while performing backup. Aborting... {e}")
         if destination:
             was_cleaned = cleanup_failed_backup(destination)
             if was_cleaned:
