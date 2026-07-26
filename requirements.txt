@@ -3,3 +3,5 @@ pytest-mock
 pytimeparse
 colorama
 jsonschema
+pathvalidate
+send2trash
