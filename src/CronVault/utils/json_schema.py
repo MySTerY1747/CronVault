@@ -28,8 +28,9 @@ SCHEMA = {
             "description": "Backup interval in seconds.",
         },
         "last_known_backup": {
-            "type": ["integer", "null"],
-            "description": "Unix timestamp of the last successful backup, or null if none.",
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "ISO-formatted timestamp of the last successful backup, or null if none.",
         },
         "total_backup_count": {"type": "integer", "minimum": 0},
         "status": {"type": "string", "enum": ["inactive", "active"]},

@@ -19,6 +19,7 @@ from utils.utils import (
     get_default_backup_name,
     parse_time_period,
     print_configs,
+    run_backup_if_needed,
     write_file,
     filter_configs_active,
     filter_configs_inactive,
@@ -60,6 +61,25 @@ if __name__ == "__main__":
     parser_deactivate.add_argument("name", type=str)
     parser_delete = subparsers.add_parser("delete", help="Delete a backup config file")
     parser_delete.add_argument("name", type=str)
+    parser_backup = subparsers.add_parser(
+        "backup", help="Backup a configured directory"
+    )
+    parser_backup.add_argument(
+        "names", nargs="*", metavar="NAME", help="Names of backup configs"
+    )
+    parser_backup.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        help="Check all active configs, and perform the ones currently due",
+    )
+    parser_backup.add_argument(
+        "-f",
+        "--force",
+        action="store_true",
+        help="Manually perform backup(s) now, even if not due",
+    )
+
     parser_create = subparsers.add_parser("create", help="Create new backup configs")
     parser_create.add_argument(
         "-n",
@@ -157,12 +177,27 @@ if __name__ == "__main__":
     def handle_delete():
         delete_backup(args.name)
 
+    def handle_backup():
+        if args.all and args.names:
+            parser.error("cannot specify backup names together with --all")
+        if not args.all and not args.names:
+            parser.error("must specify either --all or at least one backup name")
+
+        if args.all:
+            configs = filter_configs_active(get_all_backups())
+            for config in configs:
+                run_backup_if_needed(config["name"], skip_checks=args.force)
+        else:
+            for name in args.names:
+                run_backup_if_needed(name, skip_checks=args.force)
+
     handler_functions: dict[str | None, Callable] = {
         "create": handle_create,
         "list": handle_list,
         "activate": handle_activate,
         "deactivate": handle_deactivate,
         "delete": handle_delete,
+        "backup": handle_backup,
         None: exit,
     }
 

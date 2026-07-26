@@ -13,7 +13,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 from colorama import Fore, Style
-from jsonschema import ValidationError, validate
+from jsonschema import ValidationError, validate, FormatChecker
 from .json_schema import SCHEMA
 
 CONFIG_LOCATION: str = "~/.config/CronVault/"
@@ -77,7 +77,7 @@ def parse_path(folder_path: str) -> str:
         raise OSError(f"Invalid path: {folder_path}")
 
     if os.path.exists(os.path.expanduser(folder_path)):
-        return folder_path
+        return os.path.expanduser(folder_path)
     else:
         logging.exception(f"Path not found: {folder_path}")
         raise OSError(f"Path not found: {folder_path}")
@@ -224,7 +224,9 @@ def get_all_backups(file_path: Path = Path(CONFIG_LOCATION)) -> list[dict[str, A
             with open(config) as f:
                 try:
                     contents = json.load(f)
-                    validate(instance=contents, schema=SCHEMA)
+                    validate(
+                        instance=contents, schema=SCHEMA, format_checker=FormatChecker()
+                    )
                     configs.append(contents)
                 except (json.JSONDecodeError, ValidationError) as e:
                     logging.error(
@@ -290,7 +292,7 @@ def change_backup_status(
     try:
         if file_path.exists():
             config = json.loads(file_path.read_text())
-            validate(instance=config, schema=SCHEMA)
+            validate(instance=config, schema=SCHEMA, format_checker=FormatChecker())
             config["status"] = status
             file_path.write_text(json.dumps(config))
             logging.info("Successfully changed file contents")
@@ -338,7 +340,7 @@ def run_backup_if_needed(
     try:
         if file_path.exists():
             config = json.loads(file_path.read_text())
-            validate(instance=config, schema=SCHEMA)
+            validate(instance=config, schema=SCHEMA, format_checker=FormatChecker())
 
             previous_backup = config["last_known_backup"]
             if previous_backup is None:
@@ -355,6 +357,10 @@ def run_backup_if_needed(
             was_performed = False
             if skip_checks or (time_period_elapsed and is_active):
                 was_performed = perform_backup(config)
+            if (not skip_checks) and (not time_period_elapsed):
+                logging.info("Skipping backup: time period has not yet elapsed")
+            elif (not skip_checks) and (not is_active):
+                logging.info("Skipping backup: not currently active")
 
             # TODO: Separate out this if statement into a `record_backup` function
             if was_performed:
@@ -528,8 +534,10 @@ def perform_backup(config: dict[str, Any], path_override: Path | None = None) ->
         if destination:
             cleanup_failed_backup(destination)
         return False
-    except OSError:
-        logging.error("Encountered OSError while performing backup. Aborting...")
+    except OSError as e:
+        logging.error(
+            f"Encountered OSError while performing backup. Aborting... \n\n {e}"
+        )
         if destination:
             was_cleaned = cleanup_failed_backup(destination)
             if was_cleaned:
@@ -538,9 +546,6 @@ def perform_backup(config: dict[str, Any], path_override: Path | None = None) ->
                 logging.info("Failed to clean up. Exiting.")
             return False
         raise
-
-    #  path should be unreachable
-    return False
 
 
 if __name__ == "__main__":
