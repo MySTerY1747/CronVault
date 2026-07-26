@@ -436,7 +436,10 @@ def get_device_free_space(backup_folder_path: Path) -> int:
 
 def cleanup_failed_backup(backup_folder_path: Path) -> bool:
     """
-    WARNING: CALLING THIS FUNCTION WILL DELETE THE PATH PASSED IN
+    Moves the given path to the system trash.
+
+    WARNING:
+    This permanently removes the backup from CronVault's perspective.
     """
     logging.info(f"Attempting to clean failed backup {backup_folder_path}")
     if not backup_folder_path.exists():
@@ -445,7 +448,7 @@ def cleanup_failed_backup(backup_folder_path: Path) -> bool:
         send2trash.send2trash(backup_folder_path)
         return True
     except (OSError, IOError):
-        logging.error("Unable to clean failed backup. Trying again.")
+        logging.error("Unable to clean failed backup.")
     return False
 
 
@@ -522,6 +525,9 @@ def perform_backup(config: dict[str, Any], path_override: Path | None = None) ->
         logging.error(
             f"WARNING: Certain files were skipped due to permission errors {e}"
         )
+        if destination:
+            cleanup_failed_backup(destination)
+        return False
     except OSError:
         logging.error("Encountered OSError while performing backup. Aborting...")
         if destination:
