@@ -19,7 +19,6 @@ from .json_schema import SCHEMA
 CONFIG_LOCATION: str = "~/.config/CronVault/"
 MAX_NAME_ATTEMPTS: int = 101
 MAX_DELETE_OLD_BACKUP_ATTEMPTS: int = 10
-MAX_FAILED_BACKUP_CLEANING_ATTEMPTS: int = 10
 CRONVAULT_MARKER_FILENAME: str = ".cronvault_marker.json"
 
 
@@ -329,7 +328,7 @@ def get_directory_size(path: Path) -> int:
     )
 
 
-def check_file_for_backup(
+def run_backup_if_needed(
     name: str,
     skip_checks: bool = False,
     file_path: Path = Path(CONFIG_LOCATION).expanduser(),
@@ -396,8 +395,14 @@ def find_oldest_backup(file_path: Path) -> Path | None:
             if backup_marker.exists():
                 #  use recorded timestamp instead of stat().st_birthtime
                 #  to ensure consistency and reliability across OSs
-                backup_date = json.loads(backup_marker.read_text())["backup_datetime"]
-                creation_dates[backup_date] = subdirectory
+                try:
+                    backup_date = json.loads(backup_marker.read_text())[
+                        "backup_datetime"
+                    ]
+                    creation_dates[backup_date] = subdirectory
+                except (json.JSONDecodeError, KeyError):
+                    logging.error(f"CronVault marker for backup {file_path} corrupted.")
+                    continue
 
         if creation_dates:
             oldest_backup_time = min(
@@ -429,16 +434,19 @@ def get_device_free_space(backup_folder_path: Path) -> int:
     return free
 
 
-def cleanup_failed_backup(backup_folder_path: Path) -> None:
+def cleanup_failed_backup(backup_folder_path: Path) -> bool:
+    """
+    WARNING: CALLING THIS FUNCTION WILL DELETE THE PATH PASSED IN
+    """
     logging.info(f"Attempting to clean failed backup {backup_folder_path}")
     if not backup_folder_path.exists():
-        return
-    for _ in range(MAX_FAILED_BACKUP_CLEANING_ATTEMPTS):
-        try:
-            send2trash.send2trash(backup_folder_path)
-            return
-        except (OSError, IOError):
-            logging.error("Unable to clean failed backup. Trying again.")
+        return True
+    try:
+        send2trash.send2trash(backup_folder_path)
+        return True
+    except (OSError, IOError):
+        logging.error("Unable to clean failed backup. Trying again.")
+    return False
 
 
 def perform_backup(config: dict[str, Any], path_override: Path | None = None) -> bool:
@@ -450,6 +458,7 @@ def perform_backup(config: dict[str, Any], path_override: Path | None = None) ->
         Path(path_override) if path_override else Path(config["destination"])
     )
     max_storage_limit = config["max_backup_size"]
+    destination: Path | None = None
 
     try:
         backup_name = datetime.strftime(datetime.now(), config["name_format"])
@@ -515,7 +524,13 @@ def perform_backup(config: dict[str, Any], path_override: Path | None = None) ->
         )
     except OSError:
         logging.error("Encountered OSError while performing backup. Aborting...")
-        cleanup_failed_backup(backup_folder_path)
+        if destination:
+            was_cleaned = cleanup_failed_backup(destination)
+            if was_cleaned:
+                logging.info("Successfully cleaned failed backup")
+            else:
+                logging.info("Failed to clean up. Exiting.")
+            return False
         raise
 
     #  path should be unreachable
