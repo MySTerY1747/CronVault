@@ -15,7 +15,7 @@ def generate_test_configs() -> list[dict[str, object]]:
             "name_format": "%Y-%m-%d_%H-%M",
             "destination": "/mnt/backups/documents",
             "time_period": 3600,
-            "last_known_backup": None,
+            "last_known_backup": "2026-04-26T19:16:33.358591",
             "total_backup_count": 12,
             "status": "active",
         },
@@ -80,4 +80,14 @@ def populated_config_directory(generate_test_configs, tmp_path) -> Path:
     (tmp_path / "broken.json").write_text("This is an invalid JSON file")
     invalid_structure = {"name": "photos"}
     (tmp_path / "invalid_structure.json").write_text(dumps(invalid_structure))
+    return tmp_path
+
+
+@pytest.fixture
+def single_valid_config_directory(generate_test_configs, tmp_path) -> Path:
+    """
+    Writes to `tmp_path`: 1 valid JSON config
+    """
+    configs = generate_test_configs
+    (tmp_path / f"{configs[0]['name']}.json").write_text(dumps(configs[0]))
     return tmp_path

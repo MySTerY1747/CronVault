@@ -419,3 +419,49 @@ def test_delete_backup_config(populated_config_directory):
 def test_delete_missing_backup_config(populated_config_directory, caplog):
     CronVault.utils.utils.delete_backup("missing_file", populated_config_directory)
     assert "No such config found" in caplog.text
+
+
+def test_get_directory_size(tmp_path):
+    sentence_one = "abc"
+    sentence_two = "defg"
+    (tmp_path / "a.txt").write_text(sentence_one)
+    (tmp_path / "b.txt").write_text(sentence_two)
+
+    assert CronVault.utils.utils.get_directory_size(tmp_path) == len(
+        sentence_one
+    ) + len(sentence_two)
+
+
+def test_get_directory_size_with_subdirectories(tmp_path):
+    sentence_one = "abc"
+    sentence_two = "defg"
+    sentence_three = "hijk"
+    (tmp_path / "a.txt").write_text(sentence_one)
+    (tmp_path / "b.txt").write_text(sentence_two)
+
+    sub_dir = tmp_path / "sub_dir"
+    sub_dir.mkdir()
+    (sub_dir / "c.txt").write_text(sentence_three)
+
+    assert CronVault.utils.utils.get_directory_size(tmp_path) == len(
+        sentence_one
+    ) + len(sentence_two) + len(sentence_three)
+
+
+# TODO: for run_backup_if_needed
+# - file path doesn't exist errors in log, and doesn't write file, same for broken/invalid formatting
+# - runs when due AND active, does NOT run when not due or not active, runs no matter what when forced
+# - test info recorded to config
+
+
+def test_run_backup_if_needed(single_valid_config_directory, mocker):
+    mock_perform_backup = mocker.patch("CronVault.utils.utils.perform_backup")
+    mock_perform_backup.return_value = True
+    CronVault.utils.utils.run_backup_if_needed(
+        "documents", skip_checks=False, file_path=single_valid_config_directory
+    )
+
+    config_contents = loads(
+        (single_valid_config_directory / "documents.json").read_text()
+    )
+    mock_perform_backup.assert_called_once_with(config_contents)
