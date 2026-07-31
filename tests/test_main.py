@@ -466,12 +466,13 @@ def test_run_backup_if_needed(single_valid_config_directory, mocker):
         (single_valid_config_directory / "documents.json").read_text()
     )
 
-    mock_perform_backup.assert_called_once_with(config_contents_after_func)
+    called_config = mock_perform_backup.call_args.args[0]
+    assert called_config["name"] == "documents"
     assert config_contents_after_func["total_backup_count"] == initial_backup_count + 1
     assert (
         datetime.now()
         - datetime.fromisoformat(config_contents_after_func["last_known_backup"])
-    ).seconds < 1
+    ).total_seconds() < 1
 
 
 def test_run_backup_file_edge_cases(populated_config_directory, mocker, caplog):
@@ -531,16 +532,40 @@ def test_run_backup_forced(populated_config_directory, mocker, caplog):
     assert "invalid_structure" in caplog.text
 
 
+def test_run_backup_if_needed_perform_fails(populated_config_directory, mocker):
+    mock_perform_backup = mocker.patch("CronVault.utils.utils.perform_backup")
+    mock_perform_backup.return_value = False
+
+    initial_config_contents = (
+        populated_config_directory / "documents.json"
+    ).read_text()
+
+    CronVault.utils.utils.run_backup_if_needed(
+        "documents", skip_checks=False, file_path=populated_config_directory
+    )
+
+    config_contents_after_func = (
+        populated_config_directory / "documents.json"
+    ).read_text()
+    assert config_contents_after_func == initial_config_contents
+
+
 def test_find_oldest_backup(tmp_path):
     #  checks that non-CronVault dirs are skipped, and oldest valid dir returned
     for dir_name in ["dir1", "dir2", "dir3", "dirCRONVAULT_older", "dirCRONVAULT"]:
         (tmp_path / dir_name).mkdir()
         if "CRON" in dir_name:
-            (
-                tmp_path / dir_name / CronVault.utils.utils.CRONVAULT_MARKER_FILENAME
-            ).write_text(
+            marker = loads(
                 CronVault.utils.utils.generate_cronvault_marker(tmp_path, tmp_path)
             )
+            marker["backup_datetime"] = (
+                "2023-01-01T00:00:00"
+                if ("older" in dir_name)
+                else "2025-01-01T00:00:00"
+            )
+            (
+                tmp_path / dir_name / CronVault.utils.utils.CRONVAULT_MARKER_FILENAME
+            ).write_text(dumps(marker))
     assert CronVault.utils.utils.find_oldest_backup(tmp_path) == (
         tmp_path / "dirCRONVAULT_older"
     )
@@ -567,7 +592,7 @@ def test_generate_cronvault_marker():
     time_difference = datetime.now() - datetime.fromisoformat(
         generated_marker["backup_datetime"]
     )
-    assert time_difference.seconds <= 1
+    assert time_difference.total_seconds() <= 1
     assert generated_marker["backup_folder_path"] == "pathB"
 
 
@@ -575,6 +600,9 @@ def test_generate_cronvault_marker():
 
 
 def test_cleanup_failed_backup(tmp_path):
+    existing_dir = tmp_path / "existing_dir"
+    existing_dir.mkdir()
+    (existing_dir / "important_file.txt").write_text("Important!")
     initial_size = CronVault.utils.utils.get_directory_size(
         tmp_path
     )  #  function has already been tested, and is therefore safe and functional
@@ -585,3 +613,6 @@ def test_cleanup_failed_backup(tmp_path):
     CronVault.utils.utils.cleanup_failed_backup(sub_dir)
     final_size = CronVault.utils.utils.get_directory_size(tmp_path)
     assert final_size == initial_size
+    dirs = tmp_path.iterdir()
+    assert existing_dir in dirs
+    assert sub_dir not in dirs
