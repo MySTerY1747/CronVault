@@ -2,6 +2,7 @@
 #  Shared pytest fixtures
 import pytest
 from json import dumps
+from datetime import datetime
 from pathlib import Path
 
 
@@ -37,7 +38,7 @@ def generate_test_configs() -> list[dict[str, object]]:
             "name_format": "%Y%m%d_%H%M%S",
             "destination": "/mnt/backups/projects",
             "time_period": 7200,
-            "last_known_backup": "2026-07-26T19:16:33.358591",
+            "last_known_backup": datetime.now().isoformat(),
             "total_backup_count": 5,
             "status": "active",
         },

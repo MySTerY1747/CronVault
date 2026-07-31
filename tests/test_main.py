@@ -7,6 +7,7 @@ import os
 import CronVault.utils.utils
 import pytest
 from pathlib import Path
+from datetime import datetime
 
 
 def test_help():
@@ -448,20 +449,139 @@ def test_get_directory_size_with_subdirectories(tmp_path):
     ) + len(sentence_two) + len(sentence_three)
 
 
-# TODO: for run_backup_if_needed
-# - file path doesn't exist errors in log, and doesn't write file, same for broken/invalid formatting
-# - runs when due AND active, does NOT run when not due or not active, runs no matter what when forced
-# - test info recorded to config
-
-
 def test_run_backup_if_needed(single_valid_config_directory, mocker):
     mock_perform_backup = mocker.patch("CronVault.utils.utils.perform_backup")
     mock_perform_backup.return_value = True
+
+    initial_config_contents = loads(
+        (single_valid_config_directory / "documents.json").read_text()
+    )
+    initial_backup_count = initial_config_contents["total_backup_count"]
+
     CronVault.utils.utils.run_backup_if_needed(
         "documents", skip_checks=False, file_path=single_valid_config_directory
     )
 
-    config_contents = loads(
+    config_contents_after_func = loads(
         (single_valid_config_directory / "documents.json").read_text()
     )
-    mock_perform_backup.assert_called_once_with(config_contents)
+
+    mock_perform_backup.assert_called_once_with(config_contents_after_func)
+    assert config_contents_after_func["total_backup_count"] == initial_backup_count + 1
+    assert (
+        datetime.now()
+        - datetime.fromisoformat(config_contents_after_func["last_known_backup"])
+    ).seconds < 1
+
+
+def test_run_backup_file_edge_cases(populated_config_directory, mocker, caplog):
+    #  documents should be backed up, same with notes
+    #  photos, music, projects should not (photos & music inactive, projects active but recently backed up)
+    #  Broken/invalid files should be skipped
+    mock_perform_backup = mocker.patch("CronVault.utils.utils.perform_backup")
+    mock_perform_backup.return_value = True
+
+    all_filenames = [
+        "documents",
+        "photos",
+        "music",
+        "projects",
+        "notes",
+        "broken",
+        "invalid_structure",
+    ]
+
+    for name in all_filenames:
+        CronVault.utils.utils.run_backup_if_needed(
+            name, skip_checks=False, file_path=populated_config_directory
+        )
+
+    called_configs = [call.args[0] for call in mock_perform_backup.call_args_list]
+    assert len(called_configs) == 2
+    assert called_configs[0]["name"] == "documents"
+    assert called_configs[1]["name"] == "notes"
+    #  photos, music, projects, broken, and invalid were all skipped
+    assert "broken" in caplog.text
+    assert "invalid_structure" in caplog.text
+
+
+def test_run_backup_forced(populated_config_directory, mocker, caplog):
+    #  test that all backups are performed, despite elapsed-time or activity status, when forced flag True
+    mock_perform_backup = mocker.patch("CronVault.utils.utils.perform_backup")
+    mock_perform_backup.return_value = True
+
+    all_filenames = [
+        "documents",
+        "photos",
+        "music",
+        "projects",
+        "notes",
+        "broken",
+        "invalid_structure",
+    ]
+
+    for name in all_filenames:
+        CronVault.utils.utils.run_backup_if_needed(
+            name, skip_checks=True, file_path=populated_config_directory
+        )
+
+    assert mock_perform_backup.call_count == 5
+    #  photos, music, projects, broken, and invalid were all skipped
+    assert "broken" in caplog.text
+    assert "invalid_structure" in caplog.text
+
+
+def test_find_oldest_backup(tmp_path):
+    #  checks that non-CronVault dirs are skipped, and oldest valid dir returned
+    for dir_name in ["dir1", "dir2", "dir3", "dirCRONVAULT_older", "dirCRONVAULT"]:
+        (tmp_path / dir_name).mkdir()
+        if "CRON" in dir_name:
+            (
+                tmp_path / dir_name / CronVault.utils.utils.CRONVAULT_MARKER_FILENAME
+            ).write_text(
+                CronVault.utils.utils.generate_cronvault_marker(tmp_path, tmp_path)
+            )
+    assert CronVault.utils.utils.find_oldest_backup(tmp_path) == (
+        tmp_path / "dirCRONVAULT_older"
+    )
+
+
+def test_find_oldest_backup_no_cronvault_dirs(tmp_path):
+    #  checks that non-CronVault dirs are skipped, and oldest valid dir returned
+    for dir_name in ["dir1", "dir2", "dir3", "dir4", "dir5"]:
+        (tmp_path / dir_name).mkdir()
+        if "CRON" in dir_name:
+            (
+                tmp_path / dir_name / CronVault.utils.utils.CRONVAULT_MARKER_FILENAME
+            ).write_text(
+                CronVault.utils.utils.generate_cronvault_marker(tmp_path, tmp_path)
+            )
+    assert CronVault.utils.utils.find_oldest_backup(tmp_path) is None
+
+
+def test_generate_cronvault_marker():
+    generated_marker = loads(
+        CronVault.utils.utils.generate_cronvault_marker(Path("pathA"), Path("pathB"))
+    )
+    assert generated_marker["original_folder"] == "pathA"
+    time_difference = datetime.now() - datetime.fromisoformat(
+        generated_marker["backup_datetime"]
+    )
+    assert time_difference.seconds <= 1
+    assert generated_marker["backup_folder_path"] == "pathB"
+
+
+#  no point in testing `get_device_free_space`, it would be testing core Python lib functions, no need
+
+
+def test_cleanup_failed_backup(tmp_path):
+    initial_size = CronVault.utils.utils.get_directory_size(
+        tmp_path
+    )  #  function has already been tested, and is therefore safe and functional
+    sub_dir: Path = tmp_path / "test_subdir"
+    sub_dir.mkdir()
+    for filename in ["test1.txt", "test2.txt", "test3.txt"]:
+        (sub_dir / filename).write_text("This is a large file.\n" * 10)
+    CronVault.utils.utils.cleanup_failed_backup(sub_dir)
+    final_size = CronVault.utils.utils.get_directory_size(tmp_path)
+    assert final_size == initial_size
