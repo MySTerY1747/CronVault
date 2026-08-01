@@ -6,6 +6,7 @@ import os
 
 import CronVault.utils.utils
 import pytest
+from unittest.mock import patch
 from pathlib import Path
 from datetime import datetime
 
@@ -536,17 +537,17 @@ def test_run_backup_if_needed_perform_fails(populated_config_directory, mocker):
     mock_perform_backup = mocker.patch("CronVault.utils.utils.perform_backup")
     mock_perform_backup.return_value = False
 
-    initial_config_contents = (
-        populated_config_directory / "documents.json"
-    ).read_text()
+    initial_config_contents = loads(
+        (populated_config_directory / "documents.json").read_text()
+    )
 
     CronVault.utils.utils.run_backup_if_needed(
         "documents", skip_checks=False, file_path=populated_config_directory
     )
 
-    config_contents_after_func = (
-        populated_config_directory / "documents.json"
-    ).read_text()
+    config_contents_after_func = loads(
+        (populated_config_directory / "documents.json").read_text()
+    )
     assert config_contents_after_func == initial_config_contents
 
 
@@ -613,6 +614,131 @@ def test_cleanup_failed_backup(tmp_path):
     CronVault.utils.utils.cleanup_failed_backup(sub_dir)
     final_size = CronVault.utils.utils.get_directory_size(tmp_path)
     assert final_size == initial_size
-    dirs = tmp_path.iterdir()
-    assert existing_dir in dirs
-    assert sub_dir not in dirs
+    assert existing_dir.exists()
+    assert not sub_dir.exists()
+
+
+def test_perform_backup_invalid_path(single_valid_config_directory, caplog):
+    config = loads((single_valid_config_directory / "documents.json").read_text())
+    config["name_format"] = "\0! #$.."
+    new_backup_dir = single_valid_config_directory / "temp_backup"
+    new_backup_dir.mkdir()
+    assert (
+        CronVault.utils.utils.perform_backup(config, path_override=new_backup_dir)
+        is False
+    )
+    assert "not valid" in caplog.text
+
+
+def test_perform_backup_enough_storage_doesnt_call_find_oldest_backup(
+    single_valid_config_directory, mocker
+):
+    mock_find_oldest_backup = mocker.patch("CronVault.utils.utils.find_oldest_backup")
+    mock_get_device_storage = mocker.patch(
+        "CronVault.utils.utils.get_device_free_space"
+    )
+    mock_get_device_storage.return_value = 10_000_000_000_000_000_000
+    mock_get_directory_size = mocker.patch("CronVault.utils.utils.get_directory_size")
+    mock_get_directory_size.side_effect = [1500, 3000]
+
+    config = loads((single_valid_config_directory / "documents.json").read_text())
+    new_backup_dir = single_valid_config_directory / "temp_backup"
+    new_backup_dir.mkdir()
+    CronVault.utils.utils.perform_backup(config, path_override=new_backup_dir)
+
+    assert mock_find_oldest_backup.call_count == 0
+
+
+def test_perform_backup_lack_storage_exits(single_valid_config_directory, mocker):
+    mock_get_device_storage = mocker.patch(
+        "CronVault.utils.utils.get_device_free_space"
+    )
+    mock_get_device_storage.return_value = 10_000_000_000_000_000_000
+    mock_get_directory_size = mocker.patch("CronVault.utils.utils.get_directory_size")
+    mock_get_directory_size.side_effect = [
+        35_000_000_000,
+        48_000_000_000,
+        47_000_000_000,
+        46_000_000_000,
+        45_000_000_000,
+        44_000_000_000,
+        43_000_000_000,
+        42_000_000_000,
+        41_000_000_000,
+        40_000_000_000,
+        39_000_000_000,
+    ]
+
+    config = loads((single_valid_config_directory / "documents.json").read_text())
+    new_backup_dir = single_valid_config_directory / "temp_backup"
+    new_backup_dir.mkdir()
+    marker = CronVault.utils.utils.generate_cronvault_marker(
+        Path("test1"), Path("test2")
+    )
+    for counter in range(9):
+        new_dir = new_backup_dir / f"backup_{counter}"
+        new_dir.mkdir()
+        (new_dir / CronVault.utils.utils.CRONVAULT_MARKER_FILENAME).write_text(marker)
+
+    non_cronvault_dir = new_backup_dir / "other_dir"
+    non_cronvault_dir.mkdir()
+
+    return_value = CronVault.utils.utils.perform_backup(
+        config, path_override=new_backup_dir
+    )
+
+    assert return_value is False
+    for counter in range(9):
+        assert not (new_backup_dir / f"backup_{counter}").exists()
+    assert non_cronvault_dir.exists()
+
+
+def test_perform_backup_deletes_old_backups_and_correctly_copies_data(
+    single_valid_config_directory, mocker
+):
+    mock_get_device_storage = mocker.patch(
+        "CronVault.utils.utils.get_device_free_space"
+    )
+    with patch("CronVault.utils.utils.Path.copy_into") as mock_copy_into:
+        mock_get_device_storage.return_value = 10_000_000_000_000_000_000
+        mock_get_directory_size = mocker.patch(
+            "CronVault.utils.utils.get_directory_size"
+        )
+        mock_get_directory_size.side_effect = [
+            35_000_000_000,
+            48_000_000_000,
+            47_000_000_000,
+            46_000_000_000,
+            45_000_000_000,
+            #  mock deleting a heavy backup, and now there's space
+            4_000_000_000,
+        ]
+
+        config = loads((single_valid_config_directory / "documents.json").read_text())
+        new_backup_dir = single_valid_config_directory / "temp_backup"
+        new_backup_dir.mkdir()
+        marker = CronVault.utils.utils.generate_cronvault_marker(
+            Path("test1"), Path("test2")
+        )
+        for counter in range(9):
+            new_dir = new_backup_dir / f"backup_{counter}"
+            new_dir.mkdir()
+            (new_dir / CronVault.utils.utils.CRONVAULT_MARKER_FILENAME).write_text(
+                marker
+            )
+
+        non_cronvault_dir = new_backup_dir / "other_dir"
+        non_cronvault_dir.mkdir()
+
+        return_value = CronVault.utils.utils.perform_backup(
+            config, path_override=new_backup_dir
+        )
+
+        assert return_value is True
+        assert mock_copy_into.call_count == 1
+        backup_count: int = 0
+        for counter in range(9):
+            if (new_backup_dir / f"backup_{counter}").exists():
+                backup_count += 1
+        assert backup_count == 5
+        assert non_cronvault_dir.exists()
