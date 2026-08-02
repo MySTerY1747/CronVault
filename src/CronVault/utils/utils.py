@@ -15,7 +15,7 @@ from typing import Any
 from colorama import Fore, Style
 from jsonschema import ValidationError, validate, FormatChecker
 from .json_schema import SCHEMA
-from crontab import CronTab
+from crontab import CronTab, CronItem
 
 CONFIG_LOCATION: str = "~/.config/CronVault/"
 CONFIG_FILE_NAME: str = "CronVault.conf"
@@ -557,24 +557,23 @@ def generate_default_config(file_path: Path = Path(CONFIG_LOCATION).expanduser()
     config_filepath.write_text(json.dumps(config))
 
 
-def add_cron_job(config_path: Path = Path(CONFIG_LOCATION).expanduser()):
-    #  add try except
-    logging.info("Checking whether cron job exists")
-    config_file_path = config_path / CONFIG_FILE_NAME
+def get_backup_frequency_from_config(config_dir: Path) -> int:
+    config_file_path = config_dir / CONFIG_FILE_NAME
     if not config_file_path.exists():
         logging.info("No config file found. Creating now")
-        generate_default_config()
+        generate_default_config(config_file_path)
     config = json.loads(config_file_path.read_text())
     if not isinstance(config.get("backup_frequency_minutes", None), int):
         #  only need a single property, no need for entire JSON schema (yet)
         logging.error(
             f"Corrupted/invalid config file: {config_file_path}. 'backup_frequency_minutes' property is missing or invalid"
         )
-    backup_check_frequency: int = config["backup_frequency_minutes"]
-    logging.info("Opening cron jobs list")
-    cron = CronTab(user=True)
-    cronvault_jobs = list(cron.find_comment(re.compile(f"{CRON_JOB_COMMENT}")))
+    return config["backup_frequency_minutes"]
 
+
+def iterate_and_filter_cron_jobs(
+    cronvault_jobs: list[CronItem], backup_check_frequency: int
+) -> bool:
     job_exists = False
 
     #  only keep one active job, with correct backup check frequency
@@ -600,17 +599,33 @@ def add_cron_job(config_path: Path = Path(CONFIG_LOCATION).expanduser()):
                 #  pyright thinks `minute` is an int
                 job.minute.every(backup_check_frequency)  #  pyright: ignore
                 job_exists = True
+    return job_exists
 
-    if not job_exists:
-        logging.info("No cron job found. Creating now")
-        job = cron.new(
-            #  TODO: WIP. Command must be changed later. This is just for testing
-            command="source /Users/stefanos/Coding/CronVault/.venv/bin/activate && python3 /Users/stefanos/Coding/CronVault/src/CronVault/main.py backup -a",
-            #  TODO: Add minute interval here. Use regex for comment search
-            comment=f"{CRON_JOB_COMMENT} {backup_check_frequency}",
+
+def add_cron_job(config_path: Path = Path(CONFIG_LOCATION).expanduser()):
+    try:
+        logging.info("Checking whether cron job exists")
+        backup_check_frequency: int = get_backup_frequency_from_config(config_path)
+        logging.info("Opening cron jobs list")
+        cron = CronTab(user=True)
+        cronvault_jobs = list(cron.find_comment(re.compile(f"{CRON_JOB_COMMENT}")))
+
+        job_exists = iterate_and_filter_cron_jobs(
+            cronvault_jobs, backup_check_frequency
         )
-        job.minute.every(backup_check_frequency)  #  pyright: ignore
-    cron.write()
+
+        if not job_exists:
+            logging.info("No cron job found. Creating now")
+            job = cron.new(
+                #  TODO: WIP. Command must be changed later. This is just for testing
+                command="source /Users/stefanos/Coding/CronVault/.venv/bin/activate && python3 /Users/stefanos/Coding/CronVault/src/CronVault/main.py backup -a",
+                comment=f"{CRON_JOB_COMMENT} {backup_check_frequency}",
+            )
+            job.minute.every(backup_check_frequency)  #  pyright: ignore
+        cron.write()
+    except OSError as e:
+        logging.exception(f"Got OSError while going through Cron jobs: {e}")
+        raise
 
 
 if __name__ == "__main__":
