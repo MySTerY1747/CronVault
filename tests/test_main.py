@@ -3,11 +3,9 @@
 
 from json import dumps, loads
 import os
-from unittest import mock
 
 import CronVault.utils.utils
 import pytest
-from unittest.mock import patch
 from pathlib import Path
 from datetime import datetime
 

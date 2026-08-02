@@ -205,7 +205,7 @@ if __name__ == "__main__":
 
     logging.info("Handler function complete. Exiting...")
 
-    # TODO: Add integration test for `create` and `backup`
+    # TODO: Add integration test for `create`
     # TODO: add watchdog cron job on startup, and create associated function
     # TODO: Add walkthrough functionality for `create` command
     # TODO: Refactor into multiple files. Consider using an object instead of dictionaries
