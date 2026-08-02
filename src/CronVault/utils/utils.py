@@ -15,11 +15,15 @@ from typing import Any
 from colorama import Fore, Style
 from jsonschema import ValidationError, validate, FormatChecker
 from .json_schema import SCHEMA
+from crontab import CronTab
 
 CONFIG_LOCATION: str = "~/.config/CronVault/"
+CONFIG_FILE_NAME: str = "CronVault.conf"
 MAX_NAME_ATTEMPTS: int = 101
 MAX_DELETE_OLD_BACKUP_ATTEMPTS: int = 10
 CRONVAULT_MARKER_FILENAME: str = ".cronvault_marker.json"
+DEFAULT_CHECK_FREQUENCY: int = 10  #  run check every 10 minutes
+CRON_JOB_COMMENT: str = "Automated CronVault check. Minute frequency:"
 
 
 def parse_name(name: str) -> str:
@@ -461,6 +465,7 @@ def cleanup_failed_backup(backup_folder_path: Path) -> bool:
 def perform_backup(config: dict[str, Any], path_override: Path | None = None) -> bool:
     """config must be valid and already checked"""
     #  in the future, add notification support
+    #  and option to zip by default
     logging.info(f"Performing backup for config {config['name']}")
     folder_path = Path(config["path"])
     backup_folder_path = (
@@ -544,6 +549,68 @@ def perform_backup(config: dict[str, Any], path_override: Path | None = None) ->
                 logging.info("Failed to clean up. Exiting.")
             return False
         raise
+
+
+def generate_default_config(file_path: Path = Path(CONFIG_LOCATION).expanduser()):
+    config = {"backup_frequency_minutes": DEFAULT_CHECK_FREQUENCY}
+    config_filepath = file_path / CONFIG_FILE_NAME
+    config_filepath.write_text(json.dumps(config))
+
+
+def add_cron_job(config_path: Path = Path(CONFIG_LOCATION).expanduser()):
+    #  add try except
+    logging.info("Checking whether cron job exists")
+    config_file_path = config_path / CONFIG_FILE_NAME
+    if not config_file_path.exists():
+        logging.info("No config file found. Creating now")
+        generate_default_config()
+    config = json.loads(config_file_path.read_text())
+    if not isinstance(config.get("backup_frequency_minutes", None), int):
+        #  only need a single property, no need for entire JSON schema (yet)
+        logging.error(
+            f"Corrupted/invalid config file: {config_file_path}. 'backup_frequency_minutes' property is missing or invalid"
+        )
+    backup_check_frequency: int = config["backup_frequency_minutes"]
+    logging.info("Opening cron jobs list")
+    cron = CronTab(user=True)
+    cronvault_jobs = list(cron.find_comment(re.compile(f"{CRON_JOB_COMMENT}")))
+
+    job_exists = False
+
+    #  only keep one active job, with correct backup check frequency
+    logging.info(f"Iterating through {len(cronvault_jobs)} cron job(s)")
+    for job in cronvault_jobs:
+        if job.is_enabled() and job.is_valid():
+            if job_exists:
+                job.enable(False)
+                continue
+
+            pattern = r"\d+"
+            match = re.search(pattern, job.comment)
+            if not match:
+                logging.error("Invalid CronVault job found. Disabling")
+                job.enable(False)
+                continue
+            interval = int(match.group())
+
+            if interval == backup_check_frequency:
+                logging.info("Job already exists with proper frequency.")
+                job_exists = True
+            else:
+                #  pyright thinks `minute` is an int
+                job.minute.every(backup_check_frequency)  #  pyright: ignore
+                job_exists = True
+
+    if not job_exists:
+        logging.info("No cron job found. Creating now")
+        job = cron.new(
+            #  TODO: WIP. Command must be changed later. This is just for testing
+            command="source /Users/stefanos/Coding/CronVault/.venv/bin/activate && python3 /Users/stefanos/Coding/CronVault/src/CronVault/main.py backup -a",
+            #  TODO: Add minute interval here. Use regex for comment search
+            comment=f"{CRON_JOB_COMMENT} {backup_check_frequency}",
+        )
+        job.minute.every(backup_check_frequency)  #  pyright: ignore
+    cron.write()
 
 
 if __name__ == "__main__":

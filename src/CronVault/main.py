@@ -7,6 +7,7 @@ from logging import Logger
 from typing import Callable
 
 from utils.utils import (
+    add_cron_job,
     change_backup_status,
     convert_user_args_json,
     delete_backup,
@@ -201,6 +202,8 @@ if __name__ == "__main__":
         None: exit,
     }
 
+    add_cron_job()
+    logging.info("Calling handler function")
     handler_functions[args.command]()
 
     logging.info("Handler function complete. Exiting...")

@@ -3,7 +3,6 @@
 
 from json import dumps, loads
 import os
-
 import CronVault.utils.utils
 import pytest
 from pathlib import Path
