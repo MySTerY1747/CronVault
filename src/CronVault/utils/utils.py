@@ -22,7 +22,7 @@ CONFIG_FILE_NAME: str = "CronVault.conf"
 MAX_NAME_ATTEMPTS: int = 101
 MAX_DELETE_OLD_BACKUP_ATTEMPTS: int = 10
 CRONVAULT_MARKER_FILENAME: str = ".cronvault_marker.json"
-DEFAULT_CHECK_FREQUENCY: int = 10  #  run check every 10 minutes
+DEFAULT_BACKUP_CHECK_INTERVAL_MINUTES: int = 10  #  run check every 10 minutes
 CRON_JOB_COMMENT: str = "Automated CronVault check. Minute frequency:"
 
 
@@ -551,8 +551,11 @@ def perform_backup(config: dict[str, Any], path_override: Path | None = None) ->
         raise
 
 
-def generate_default_config(file_path: Path = Path(CONFIG_LOCATION).expanduser()):
-    config = {"backup_frequency_minutes": DEFAULT_CHECK_FREQUENCY}
+def generate_default_config(
+    file_path: Path = Path(CONFIG_LOCATION).expanduser(),
+) -> None:
+    config = {"backup_frequency_minutes": DEFAULT_BACKUP_CHECK_INTERVAL_MINUTES}
+    file_path.mkdir(parents=True, exist_ok=True)
     config_filepath = file_path / CONFIG_FILE_NAME
     config_filepath.write_text(json.dumps(config))
 
@@ -561,7 +564,7 @@ def get_backup_frequency_from_config(config_dir: Path) -> int:
     config_file_path = config_dir / CONFIG_FILE_NAME
     if not config_file_path.exists():
         logging.info("No config file found. Creating now")
-        generate_default_config(config_file_path)
+        generate_default_config(config_dir)
     config = json.loads(config_file_path.read_text())
     if not isinstance(config.get("backup_frequency_minutes", None), int):
         #  only need a single property, no need for entire JSON schema (yet)
@@ -571,7 +574,7 @@ def get_backup_frequency_from_config(config_dir: Path) -> int:
     return config["backup_frequency_minutes"]
 
 
-def iterate_and_filter_cron_jobs(
+def ensure_single_cron_job(
     cronvault_jobs: list[CronItem], backup_check_frequency: int
 ) -> bool:
     job_exists = False
@@ -581,14 +584,14 @@ def iterate_and_filter_cron_jobs(
     for job in cronvault_jobs:
         if job.is_enabled() and job.is_valid():
             if job_exists:
-                job.enable(False)
+                job.delete()
                 continue
 
             pattern = r"\d+"
             match = re.search(pattern, job.comment)
             if not match:
-                logging.error("Invalid CronVault job found. Disabling")
-                job.enable(False)
+                logging.error("Invalid CronVault job found. Deleting.")
+                job.delete()
                 continue
             interval = int(match.group())
 
@@ -598,21 +601,20 @@ def iterate_and_filter_cron_jobs(
             else:
                 #  pyright thinks `minute` is an int
                 job.minute.every(backup_check_frequency)  #  pyright: ignore
+                job.comment = f"{CRON_JOB_COMMENT} {backup_check_frequency}"
                 job_exists = True
     return job_exists
 
 
-def add_cron_job(config_path: Path = Path(CONFIG_LOCATION).expanduser()):
+def add_cron_job(config_path: Path = Path(CONFIG_LOCATION).expanduser()) -> None:
     try:
         logging.info("Checking whether cron job exists")
         backup_check_frequency: int = get_backup_frequency_from_config(config_path)
-        logging.info("Opening cron jobs list")
+        logging.info("Reading user crontab")
         cron = CronTab(user=True)
         cronvault_jobs = list(cron.find_comment(re.compile(f"{CRON_JOB_COMMENT}")))
 
-        job_exists = iterate_and_filter_cron_jobs(
-            cronvault_jobs, backup_check_frequency
-        )
+        job_exists = ensure_single_cron_job(cronvault_jobs, backup_check_frequency)
 
         if not job_exists:
             logging.info("No cron job found. Creating now")
