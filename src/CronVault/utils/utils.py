@@ -566,7 +566,8 @@ def get_backup_frequency_from_config(config_dir: Path) -> int:
         logging.info("No config file found. Creating now")
         generate_default_config(config_dir)
     config = json.loads(config_file_path.read_text())
-    if not isinstance(config.get("backup_frequency_minutes", None), int):
+    frequency = config.get("backup_frequency_minutes", None)
+    if not isinstance(frequency, int) or frequency <= 0:
         #  only need a single property, no need for entire JSON schema (yet)
         logging.error(
             f"Corrupted/invalid config file: {config_file_path}. 'backup_frequency_minutes' property is missing or invalid"
@@ -587,13 +588,18 @@ def ensure_single_cron_job(
                 job.delete()
                 continue
 
-            pattern = r"\d+"
-            match = re.search(pattern, job.comment)
-            if not match:
+            prefix = f"{CRON_JOB_COMMENT}"
+            if not job.comment.startswith(prefix):
+                logging.error("Invalid CronVault job found. Deleting")
+                job.delete()
+                continue
+
+            try:
+                interval = int(job.comment.removeprefix(prefix))
+            except ValueError:
                 logging.error("Invalid CronVault job found. Deleting.")
                 job.delete()
                 continue
-            interval = int(match.group())
 
             if interval == backup_check_frequency:
                 logging.info("Job already exists with proper frequency.")
