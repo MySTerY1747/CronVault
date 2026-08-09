@@ -572,6 +572,9 @@ def get_backup_frequency_from_config(config_dir: Path) -> int:
         logging.error(
             f"Corrupted/invalid config file: {config_file_path}. 'backup_frequency_minutes' property is missing or invalid"
         )
+        raise ValueError(
+            f"Corrupted/invalid config file: {config_file_path}. 'backup_frequency_minutes' property is missing or invalid"
+        )
     return config["backup_frequency_minutes"]
 
 

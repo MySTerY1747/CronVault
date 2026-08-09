@@ -3,6 +3,7 @@
 
 from json import dumps, loads
 import os
+from unittest.mock import MagicMock
 import CronVault.utils.utils
 import pytest
 from pathlib import Path
@@ -777,3 +778,166 @@ def test_perform_backup_calls_cleanup_when_OSERROR_raised(
     )
     assert return_value is False
     mock_cleanup.assert_called_once()
+
+
+def test_generate_default_config(tmp_path: Path):
+    CronVault.utils.utils.generate_default_config(tmp_path)
+
+    config_path = tmp_path / CronVault.utils.utils.CONFIG_FILE_NAME
+
+    assert config_path.exists()
+    file_contents = loads(config_path.read_text())
+    assert "backup_frequency_minutes" in file_contents
+    assert (
+        file_contents["backup_frequency_minutes"]
+        == CronVault.utils.utils.DEFAULT_BACKUP_CHECK_INTERVAL_MINUTES
+    )
+
+
+def test_generate_default_config_creates_parent_dir(tmp_path: Path):
+    nested_dir = tmp_path / "subdir" / "sub_subdir"
+    CronVault.utils.utils.generate_default_config(nested_dir)
+    assert nested_dir.exists()
+    assert (nested_dir / CronVault.utils.utils.CONFIG_FILE_NAME).exists()
+
+
+def test_get_backup_frequency_from_config(tmp_path: Path):
+    CronVault.utils.utils.generate_default_config(tmp_path)
+    assert (
+        CronVault.utils.utils.get_backup_frequency_from_config(tmp_path)
+        == CronVault.utils.utils.DEFAULT_BACKUP_CHECK_INTERVAL_MINUTES
+    )
+
+
+def test_get_backup_frequency_from_config_custom_config(tmp_path: Path):
+    config = {"backup_frequency_minutes": 50}
+    (tmp_path / CronVault.utils.utils.CONFIG_FILE_NAME).write_text(dumps(config))
+    assert CronVault.utils.utils.get_backup_frequency_from_config(tmp_path) == 50
+
+
+def test_get_backup_frequency_from_config_missing_config_creates_it(tmp_path: Path):
+    result = CronVault.utils.utils.get_backup_frequency_from_config(tmp_path)
+
+    config_file_path = tmp_path / CronVault.utils.utils.CONFIG_FILE_NAME
+
+    assert config_file_path.exists()
+    assert result == CronVault.utils.utils.DEFAULT_BACKUP_CHECK_INTERVAL_MINUTES
+
+
+@pytest.mark.parametrize("frequency", [0, -1, "10", None, 1.5])
+def test_get_backup_frequency_rejects_invalid_frequency(tmp_path, frequency):
+    config_path = tmp_path / CronVault.utils.utils.CONFIG_FILE_NAME
+    config_path.write_text(dumps({"backup_frequency_minutes": frequency}))
+
+    with pytest.raises(ValueError):
+        CronVault.utils.utils.get_backup_frequency_from_config(tmp_path)
+
+
+def test_ensure_single_cron_job_no_existing_jobs():
+    result = CronVault.utils.utils.ensure_single_cron_job([], 10)
+    assert result is False
+
+
+def test_ensure_single_cron_job_correct():
+    job = MagicMock()
+
+    job.is_enabled.return_value = True
+    job.is_valid.return_value = True
+    job.comment = "Automated CronVault check. Minute frequency: 10"
+
+    result = CronVault.utils.utils.ensure_single_cron_job([job], 10)
+
+    assert result is True
+    job.enable.assert_not_called()
+    job.delete.assert_not_called()
+
+
+def test_ensure_single_cron_job_wrong_frequency():
+    job = MagicMock()
+    job.is_enabled.return_value = True
+    job.is_valid.return_value = True
+    job.comment = "Automated CronVault check. Minute frequency: 20"
+
+    result = CronVault.utils.utils.ensure_single_cron_job([job], 10)
+
+    assert result is True
+    job.minute.every.assert_called_once_with(10)
+    assert job.comment == "Automated CronVault check. Minute frequency: 10"
+
+
+def test_ensure_single_cron_job_deletes_duplicate():
+    job1 = MagicMock()
+    job1.is_enabled.return_value = True
+    job1.is_valid.return_value = True
+    job1.comment = "Automated CronVault check. Minute frequency: 10"
+
+    job2 = MagicMock()
+    job2.is_enabled.return_value = True
+    job2.is_valid.return_value = True
+    job2.comment = "Automated CronVault check. Minute frequency: 10"
+
+    result = CronVault.utils.utils.ensure_single_cron_job([job1, job2], 10)
+
+    assert result is True
+    job1.delete.assert_not_called()
+    job2.delete.assert_called_once()
+
+
+def test_ensure_single_cron_job_malformed_comment():
+    job = MagicMock()
+    job.is_enabled.return_value = True
+    job.is_valid.return_value = True
+    job.comment = "Automated CronVault check. Minute frequency: banana"
+
+    result = CronVault.utils.utils.ensure_single_cron_job([job], 10)
+
+    assert result is False
+    job.delete.assert_called_once()
+
+
+def test_add_cron_job(mocker, tmp_path: Path):
+    mock_get_frequency = mocker.patch(
+        "CronVault.utils.utils.get_backup_frequency_from_config"
+    )
+    mock_ensure_job = mocker.patch("CronVault.utils.utils.ensure_single_cron_job")
+    mock_crontab = mocker.patch("CronVault.utils.utils.CronTab")
+    mock_get_frequency.return_value = 10
+    mock_ensure_job.return_value = False
+    cron = mock_crontab.return_value
+    job = MagicMock()
+    cron.new.return_value = job
+
+    CronVault.utils.utils.add_cron_job(tmp_path)
+
+    mock_get_frequency.assert_called_once_with(tmp_path)
+    mock_crontab.assert_called_once_with(user=True)
+    cron.find_comment.assert_called_once()
+    mock_ensure_job.assert_called_once_with([], 10)
+    cron.new.assert_called_once()
+    job.minute.every.assert_called_once_with(10)
+    cron.write.assert_called_once()
+
+
+def test_add_cron_job_does_not_create_duplicate(mocker, tmp_path: Path):
+    mock_get_frequency = mocker.patch(
+        "CronVault.utils.utils.get_backup_frequency_from_config"
+    )
+    mock_ensure_job = mocker.patch("CronVault.utils.utils.ensure_single_cron_job")
+    mock_crontab = mocker.patch("CronVault.utils.utils.CronTab")
+
+    mock_get_frequency.return_value = 10
+    mock_ensure_job.return_value = True
+
+    cron = mock_crontab.return_value
+    cron.find_comment.return_value = [MagicMock()]
+
+    CronVault.utils.utils.add_cron_job(tmp_path)
+
+    mock_get_frequency.assert_called_once_with(tmp_path)
+    mock_ensure_job.assert_called_once_with(
+        cron.find_comment.return_value,
+        10,
+    )
+
+    cron.new.assert_not_called()
+    cron.write.assert_called_once()
