@@ -97,38 +97,22 @@ def test_parse_size_incorrect_input():
         CronVault.utils.parse_functions.parse_size("INCORRECT_VALUE")
 
 
-def test_path_exists_empty():
-    with pytest.raises(AssertionError):
-        CronVault.utils.parse_functions.parse_path("")
-
-
 def test_path_exists_wrong_format():
     with pytest.raises(OSError):
         CronVault.utils.parse_functions.parse_path("124 \\ 54 kd & # (! ")
-    with pytest.raises(AssertionError):
-        CronVault.utils.parse_functions.parse_path("")
 
 
-def test_path_exists_nonexistent(mocker):
-    mock_os_path_exists = mocker.patch("CronVault.utils.parse_functions.os.path.exists")
-    mock_os_path_exists.return_value = False
-
+def test_path_exists_nonexistent():
     with pytest.raises(OSError):
         CronVault.utils.parse_functions.parse_path("/non/existent/path")
 
 
-def test_path_exists_existent(mocker):
-    mock_os_path_exists = mocker.patch("CronVault.utils.parse_functions.os.path.exists")
-    mock_os_path_exists.return_value = True
-
-    assert (
-        CronVault.utils.parse_functions.parse_path("/definitely/real/directory")
-        == "/definitely/real/directory"
-    )
+def test_path_exists_existent(tmp_path):
+    assert CronVault.utils.parse_functions.parse_path(str(tmp_path)) == str(tmp_path)
 
 
 def test_parse_name_format_long_name():
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         CronVault.utils.parse_functions.parse_name_format(
             "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
         )

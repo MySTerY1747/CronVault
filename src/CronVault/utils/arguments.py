@@ -29,8 +29,16 @@ create_arguments: list[Argument] = [
         "• Name to identify this backup (or press Enter to use default name from path): ",
         parse_name,
     ),
-    Argument("path", "• Path of the folder to back up: ", parse_path),
-    Argument("destination", "• Destination path for backups: ", parse_path),
+    Argument(
+        "path",
+        "• Path of the folder to back up (or press Enter to use current working directory): ",
+        parse_path,
+    ),
+    Argument(
+        "destination",
+        "• Destination path for backups (or press Enter to use current working directory): ",
+        parse_path,
+    ),
     Argument(
         "time_period",
         "• Time interval between backups (e.g. 5D, 1M, 5 hours): ",
@@ -43,7 +51,7 @@ create_arguments: list[Argument] = [
     ),
     Argument(
         "naming_format",
-        "• Naming format for backups, strftime syntax. (or press Enter to use default {name} %Y-%m-%M): ",
+        "• Naming format for backups, strftime syntax. (or press Enter to use default {name} %Y-%m-%d_%H-%M-%S): ",
         parse_name_format,
     ),
 ]

@@ -6,6 +6,7 @@ import logging
 import re
 import pytimeparse
 from datetime import datetime
+from pathlib import Path
 
 
 NAME_DEFAULT: str = "NoName"
@@ -14,9 +15,12 @@ CONFIG_LOCATION: str = "~/.config/CronVault/"
 
 
 def parse_name(name: str) -> str:
+    # TODO: Separate this into multiple functions, and move OS logic to *after* parsing
     if not name:
         return NAME_DEFAULT
-    assert (type(name) is str) and (len(name) >= 1)
+    if not isinstance(name, str) or len(name) < 1:
+        raise ValueError(f"Invalid directory path: {name}")
+
     config_folder: str = os.path.expanduser(CONFIG_LOCATION)
     try:
         if not os.path.exists(config_folder):
@@ -39,11 +43,12 @@ def parse_name(name: str) -> str:
 def parse_size(value: str | None) -> int:
     if not value:
         return FIFTY_GB
-    assert type(value) is str and len(value) >= 1
+    if not isinstance(value, str) or len(value) < 1:
+        raise ValueError(f"Invalid size: {value}")
     pattern = r"^(\d+)([KMGTP]?B?)?$"
     match = re.fullmatch(pattern, value.strip().upper())
     if not match:
-        logging.exception("Invalid size")
+        logging.error("Invalid size")
         raise ValueError(f"Invalid size: {value}")
 
     number, unit = match.groups()
@@ -64,18 +69,16 @@ def parse_size(value: str | None) -> int:
 
 
 def parse_path(folder_path: str) -> str:
-    assert (type(folder_path) is str) and (len(folder_path) > 0)
-    pattern = r"^(.+)\/([^\/]+)$"
-    match = re.fullmatch(pattern, folder_path)
-    if not match:
-        logging.exception(f"Invalid path: {folder_path}")
-        raise OSError(f"Invalid path: {folder_path}")
+    path: Path = Path(folder_path).expanduser().absolute()
 
-    if os.path.exists(os.path.expanduser(folder_path)):
-        return os.path.expanduser(folder_path)
-    else:
+    if not path.exists():
         logging.exception(f"Path not found: {folder_path}")
         raise OSError(f"Path not found: {folder_path}")
+    if not path.is_dir():
+        logging.exception(f"Path is not a directory: {folder_path}")
+        raise NotADirectoryError(f"Path is not a directory: {folder_path}")
+
+    return str(path)
 
 
 def parse_name_format(name_format: str | None) -> str:
@@ -89,8 +92,13 @@ def parse_name_format(name_format: str | None) -> str:
     """
     if not name_format:
         return NAME_DEFAULT
-    assert len(name_format) < 200
-    assert datetime.now().strftime(name_format)
+    if len(name_format) > 200:
+        raise ValueError("Name format too long. Maximum character limit is 200")
+    example_output_name = datetime.now().strftime(name_format)
+    if len(example_output_name) < 1:
+        raise ValueError(
+            f"Invalid format: {name_format} expands to {example_output_name}"
+        )
 
     #  ensure valid output filename
     return re.sub(r"[^A-Za-z0-9.%_-]", "_", name_format)

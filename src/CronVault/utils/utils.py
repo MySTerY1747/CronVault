@@ -15,12 +15,9 @@ from jsonschema import ValidationError, validate, FormatChecker
 
 from .json_schema import SCHEMA
 from .arguments import create_arguments
-from .parse_functions import parse_name
+from .parse_functions import parse_name, NAME_DEFAULT, CONFIG_LOCATION
 from crontab import CronTab, CronItem
 
-NAME_DEFAULT: str = "NoName"
-FIFTY_GB: int = 53_687_091_200  #  50GB
-CONFIG_LOCATION: str = "~/.config/CronVault/"
 CONFIG_FILE_NAME: str = "CronVault.conf"
 MAX_NAME_ATTEMPTS: int = 101
 MAX_DELETE_OLD_BACKUP_ATTEMPTS: int = 10
@@ -37,7 +34,8 @@ def get_default_backup_name(directory: str) -> str:
     Returns:
         (str) last elm of directory, appended if necessary until unique
     """
-    assert type(directory) is str and len(directory) > 0
+    if not isinstance(directory, str) or len(directory) < 1:
+        raise ValueError(f"Invalid directory path: {directory}")
 
     #  directory arg has gone through parse_path. assuming it's valid
     directory_path = Path(directory)
@@ -557,11 +555,11 @@ def fill_missing_create_args(args: dict[str, Any]) -> None:
     if args["name"] == NAME_DEFAULT:
         logging.info("No name specified. Setting it based on directory")
         args["name"] = get_default_backup_name(args["path"])
-        logging.info(f"Backup name now set to {args['path']}")
+        logging.info(f"Backup name now set to {args['name']}")
 
     if args["naming_format"] == NAME_DEFAULT:
         logging.info("No naming format specified. Setting it based on name")
-        args["naming_format"] = f"{args['name']} %Y-%m-%M"
+        args["naming_format"] = f"{args['name']} %Y-%m-%d_%H-%M-%S"
         logging.info(f"Backup naming scheme now set to {args['naming_format']}")
 
 
@@ -572,21 +570,21 @@ def interactive_config_creator(args: dict[str, Any]) -> None:
 
     for argument in create_arguments:
         arg_value = args.get(argument.name)
-        if arg_value and arg_value != NAME_DEFAULT and arg_value != FIFTY_GB:
+        if arg_value is not None:
             continue
 
         print(Fore.LIGHTBLUE_EX + Style.BRIGHT + argument.prompt, end="")
         user_input = input()
         user_input = argument.parser(user_input)
         args[argument.name] = user_input
-        logging.info(f"Input for {argument.name} received and parsed.")
+        logging.info(f"Input for {argument.name} received and parsed: {user_input}")
         print("=" * 40 + "\n")
 
 
 def create_backup_from_args(args_dict: dict[str, Any]) -> None:
     required_args = ("path", "destination", "time_period")
 
-    if not all([args_dict.get(argument) in args_dict for argument in required_args]):
+    if not all([args_dict.get(argument) is not None for argument in required_args]):
         interactive_config_creator(args_dict)
     fill_missing_create_args(args_dict)
 

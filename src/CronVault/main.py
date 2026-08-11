@@ -26,10 +26,6 @@ from utils.parse_functions import (
 )
 import colorama
 
-NAME_DEFAULT: str = "NoName"
-
-FIFTY_GB: int = 53_687_091_200  #  50GB
-
 if __name__ == "__main__":
     colorama.init(autoreset=True)
 
@@ -85,7 +81,7 @@ if __name__ == "__main__":
         "-n",
         "--name",
         type=parse_name,
-        default=NAME_DEFAULT,
+        default=None,
         help="Unique name to identify this backup",
     )
     parser_create.add_argument(
@@ -93,7 +89,7 @@ if __name__ == "__main__":
         "--max-backup-size",
         type=parse_size,
         help="Maximum total size of backups before overwriting old ones (e.g. 10MB, 4GB, 500K)",
-        default=FIFTY_GB,
+        default=None,
     )
     parser_create.add_argument(
         "-p",
@@ -113,7 +109,7 @@ if __name__ == "__main__":
         type=parse_name_format,
         help="Naming scheme for backups. Uses strftime syntax",
         required=False,
-        default=NAME_DEFAULT,
+        default=None,
     )
     parser_create.add_argument(
         "-t",
