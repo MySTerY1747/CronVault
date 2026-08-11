@@ -69,7 +69,7 @@ def parse_size(value: str | None) -> int:
 
 
 def parse_path(folder_path: str) -> str:
-    path: Path = Path(folder_path).expanduser().absolute()
+    path: Path = Path(folder_path).expanduser().resolve()
 
     if not path.exists():
         logging.exception(f"Path not found: {folder_path}")

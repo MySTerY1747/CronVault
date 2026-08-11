@@ -921,3 +921,7 @@ def test_add_cron_job_does_not_create_duplicate(mocker, tmp_path: Path):
 
     cron.new.assert_not_called()
     cron.write.assert_called_once()
+
+
+def test_parse_path_empty_uses_current_directory():
+    assert CronVault.utils.parse_functions.parse_path("") == str(Path.cwd())
