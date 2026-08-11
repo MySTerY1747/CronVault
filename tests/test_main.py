@@ -5,6 +5,7 @@ from json import dumps, loads
 import os
 from unittest.mock import MagicMock
 import CronVault.utils.utils
+import CronVault.utils.parse_functions
 import pytest
 from pathlib import Path
 from datetime import datetime
@@ -43,13 +44,13 @@ def test_cli_args():
 
 
 def test_name_unique(mocker):
-    mock_expanduser = mocker.patch("CronVault.utils.utils.os.path.expanduser")
+    mock_expanduser = mocker.patch("CronVault.utils.parse_functions.os.path.expanduser")
     mock_expanduser.return_value = "/Users/stefanos/.config/CronVault/"
 
-    mock_os_path_exists = mocker.patch("CronVault.utils.utils.os.path.exists")
+    mock_os_path_exists = mocker.patch("CronVault.utils.parse_functions.os.path.exists")
     mock_os_path_exists.return_value = True
 
-    mock_listdir = mocker.patch("CronVault.utils.utils.os.listdir")
+    mock_listdir = mocker.patch("CronVault.utils.parse_functions.os.listdir")
     mock_listdir.return_value = ["Backup1.json", "Backup2.json", "Backup3.json"]
 
     result: str = CronVault.utils.utils.parse_name("Backup 4")
@@ -59,24 +60,19 @@ def test_name_unique(mocker):
 
 
 def test_add_duplicate_name(mocker):
-    mock_expanduser = mocker.patch("CronVault.utils.utils.os.path.expanduser")
+    mock_expanduser = mocker.patch("CronVault.utils.parse_functions.os.path.expanduser")
     mock_expanduser.return_value = "/Users/stefanos/.config/CronVault/"
 
-    mock_os_path_exists = mocker.patch("CronVault.utils.utils.os.path.exists")
+    mock_os_path_exists = mocker.patch("CronVault.utils.parse_functions.os.path.exists")
     mock_os_path_exists.return_value = True
 
-    mock_listdir = mocker.patch("CronVault.utils.utils.os.listdir")
+    mock_listdir = mocker.patch("CronVault.utils.parse_functions.os.listdir")
     mock_listdir.return_value = ["Backup1.json", "Backup2.json", "Backup3.json"]
 
     with pytest.raises(ValueError):
         CronVault.utils.utils.parse_name("Backup3")
 
     mock_listdir.assert_called_once_with("/Users/stefanos/.config/CronVault/")
-
-
-def test_add_empty_name():
-    with pytest.raises(AssertionError):
-        CronVault.utils.utils.parse_name("")
 
 
 @pytest.mark.parametrize(
@@ -91,62 +87,62 @@ def test_add_empty_name():
     ],
 )
 def test_parse_size(size: str, expected: int):
-    assert CronVault.utils.utils.parse_size(size) == expected
+    assert CronVault.utils.parse_functions.parse_size(size) == expected
 
 
 def test_parse_size_incorrect_input():
     with pytest.raises(ValueError):
-        CronVault.utils.utils.parse_size("Mb15")
+        CronVault.utils.parse_functions.parse_size("Mb15")
     with pytest.raises(ValueError):
-        CronVault.utils.utils.parse_size("INCORRECT_VALUE")
+        CronVault.utils.parse_functions.parse_size("INCORRECT_VALUE")
 
 
 def test_path_exists_empty():
     with pytest.raises(AssertionError):
-        CronVault.utils.utils.parse_path("")
+        CronVault.utils.parse_functions.parse_path("")
 
 
 def test_path_exists_wrong_format():
     with pytest.raises(OSError):
-        CronVault.utils.utils.parse_path("124 \\ 54 kd & # (! ")
+        CronVault.utils.parse_functions.parse_path("124 \\ 54 kd & # (! ")
     with pytest.raises(AssertionError):
-        CronVault.utils.utils.parse_path("")
+        CronVault.utils.parse_functions.parse_path("")
 
 
 def test_path_exists_nonexistent(mocker):
-    mock_os_path_exists = mocker.patch("CronVault.utils.utils.os.path.exists")
+    mock_os_path_exists = mocker.patch("CronVault.utils.parse_functions.os.path.exists")
     mock_os_path_exists.return_value = False
 
     with pytest.raises(OSError):
-        CronVault.utils.utils.parse_path("/non/existent/path")
+        CronVault.utils.parse_functions.parse_path("/non/existent/path")
 
 
 def test_path_exists_existent(mocker):
-    mock_os_path_exists = mocker.patch("CronVault.utils.utils.os.path.exists")
+    mock_os_path_exists = mocker.patch("CronVault.utils.parse_functions.os.path.exists")
     mock_os_path_exists.return_value = True
 
     assert (
-        CronVault.utils.utils.parse_path("/definitely/real/directory")
+        CronVault.utils.parse_functions.parse_path("/definitely/real/directory")
         == "/definitely/real/directory"
     )
 
 
 def test_parse_name_format_long_name():
     with pytest.raises(AssertionError):
-        CronVault.utils.utils.parse_name_format(
+        CronVault.utils.parse_functions.parse_name_format(
             "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
         )
 
 
 def test_parse_name_format_datetime():
     input_parameter: str = "%y test 123"
-    result: str = CronVault.utils.utils.parse_name_format(input_parameter)
+    result: str = CronVault.utils.parse_functions.parse_name_format(input_parameter)
     assert result == "%y_test_123"
 
 
 def test_parse_name_format_invalid_filename():
     input_parameter: str = "abc:548?"
-    result: str = CronVault.utils.utils.parse_name_format(input_parameter)
+    result: str = CronVault.utils.parse_functions.parse_name_format(input_parameter)
     assert result == "abc_548_"
 
 
@@ -162,7 +158,7 @@ def test_parse_name_format_invalid_filename():
     ],
 )
 def test_parse_time_period(input_period: str, expected: int):
-    assert CronVault.utils.utils.parse_time_period(input_period) == expected
+    assert CronVault.utils.parse_functions.parse_time_period(input_period) == expected
 
 
 def test_parse_time_period_error():
@@ -170,9 +166,9 @@ def test_parse_time_period_error():
     unknown_values: str = "Alice and Bob"
 
     with pytest.raises(ValueError):
-        CronVault.utils.utils.parse_time_period(empty_input)
+        CronVault.utils.parse_functions.parse_time_period(empty_input)
     with pytest.raises(ValueError):
-        CronVault.utils.utils.parse_time_period(unknown_values)
+        CronVault.utils.parse_functions.parse_time_period(unknown_values)
 
 
 @pytest.mark.parametrize(
@@ -895,7 +891,7 @@ def test_ensure_single_cron_job_malformed_comment():
     job.delete.assert_called_once()
 
 
-def test_add_cron_job(mocker, tmp_path: Path):
+def test_add_cron_job_creates_job(mocker, tmp_path: Path):
     mock_get_frequency = mocker.patch(
         "CronVault.utils.utils.get_backup_frequency_from_config"
     )

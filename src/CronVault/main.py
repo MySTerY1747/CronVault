@@ -9,21 +9,20 @@ from typing import Callable
 from utils.utils import (
     add_cron_job,
     change_backup_status,
-    convert_user_args_json,
     delete_backup,
     get_all_backups,
-    get_config_path,
-    parse_name,
-    parse_size,
-    parse_path,
-    parse_name_format,
-    get_default_backup_name,
-    parse_time_period,
     print_configs,
     run_backup_if_needed,
-    write_file,
     filter_configs_active,
     filter_configs_inactive,
+    create_backup_from_args,
+)
+from utils.parse_functions import (
+    parse_name,
+    parse_size,
+    parse_name_format,
+    parse_path,
+    parse_time_period,
 )
 import colorama
 
@@ -101,14 +100,12 @@ if __name__ == "__main__":
         "--path",
         type=parse_path,
         help="Specifies the directory path to back up",
-        required=True,
     )
     parser_create.add_argument(
         "-d",
         "--destination",
         type=parse_path,
         help="Specifies the destination directory where backups will be stored",
-        required=True,
     )
     parser_create.add_argument(
         "-f",
@@ -123,7 +120,6 @@ if __name__ == "__main__":
         "--time-period",
         type=parse_time_period,
         help='Time period between backups. Uses natural syntax: "5 days", "15d10h", "1w 3d 2h 32m", "172 hours", etc.',
-        required=True,
     )
 
     args = parser.parse_args()
@@ -138,27 +134,7 @@ if __name__ == "__main__":
     logging.info(args)
 
     def handle_create():
-        if args.name == NAME_DEFAULT:
-            logging.info("No name specified. Setting it based on directory")
-            args.name = get_default_backup_name(args.path)
-            logging.info(f"Backup name now set to {args.name}")
-
-        if args.naming_format == NAME_DEFAULT:
-            logging.info("No naming format specified. Setting it based on name")
-            args.naming_format = f"{args.name} %Y-%m-%M"
-            logging.info(f"Backup naming scheme now set to {args.naming_format}")
-
-        file_path = get_config_path(args.name)
-        contents = convert_user_args_json(
-            args.name,
-            args.max_backup_size,
-            args.path,
-            args.naming_format,
-            args.destination,
-            args.time_period,
-        )  #  change this to use dictionary unpacking in the future
-        write_file(file_path, contents)
-        logging.info("Successfully wrote backup configuration file")
+        create_backup_from_args(vars(args))
 
     def handle_list():
         backup_configs = get_all_backups()
@@ -209,6 +185,4 @@ if __name__ == "__main__":
     logging.info("Handler function complete. Exiting...")
 
     # TODO: Add integration test for `create`
-    # TODO: add watchdog cron job on startup, and create associated function
-    # TODO: Add walkthrough functionality for `create` command
     # TODO: Refactor into multiple files. Consider using an object instead of dictionaries
