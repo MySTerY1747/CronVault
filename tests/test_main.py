@@ -58,6 +58,13 @@ def test_add_duplicate_name(tmp_path: Path):
         CronVault.utils.utils.check_name_not_duplicate("Backup3", tmp_path)
 
 
+def test_parse_name_default():
+    assert (
+        CronVault.utils.parse_functions.parse_name("")
+        == CronVault.utils.parse_functions.NAME_DEFAULT
+    )
+
+
 @pytest.mark.parametrize(
     "size, expected",
     [

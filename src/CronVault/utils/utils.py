@@ -607,10 +607,10 @@ def create_backup_from_args(args_dict: dict[str, Any]) -> None:
 
     if not all([args_dict.get(argument) is not None for argument in required_args]):
         interactive_config_creator(args_dict)
+    fill_missing_create_args(args_dict)
     check_name_not_duplicate(
         args_dict["name"]
     )  # putting the check here unfortunately means that a potential name conflict is only revealed to the user after they're done with the interactive config creator
-    fill_missing_create_args(args_dict)
 
     file_path = get_config_path(args_dict["name"])
     contents = convert_user_args_json(

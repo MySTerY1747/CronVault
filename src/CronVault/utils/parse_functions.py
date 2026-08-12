@@ -16,7 +16,7 @@ CONFIG_LOCATION: str = "~/.config/CronVault/"
 def parse_name(name: str) -> str:
     if not name:
         return NAME_DEFAULT
-    if not isinstance(name, str) or len(name) < 1:
+    if not isinstance(name, str) or not name:
         raise ValueError(f"Invalid config name: {name}")
     return name
 
