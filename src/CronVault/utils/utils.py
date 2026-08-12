@@ -15,7 +15,11 @@ from jsonschema import ValidationError, validate, FormatChecker
 
 from .json_schema import SCHEMA
 from .arguments import create_arguments
-from .parse_functions import parse_name, NAME_DEFAULT, CONFIG_LOCATION
+from .parse_functions import (
+    parse_name,
+    NAME_DEFAULT,
+    CONFIG_LOCATION,
+)
 from crontab import CronTab, CronItem
 
 CONFIG_FILE_NAME: str = "CronVault.conf"
@@ -551,6 +555,23 @@ def add_cron_job(config_path: Path = Path(CONFIG_LOCATION).expanduser()) -> None
         raise
 
 
+def check_name_not_duplicate(
+    name: str, config_path: Path = Path(CONFIG_LOCATION).expanduser()
+) -> None:
+    try:
+        potential_path = config_path / f"{name}.json"
+        if not config_path.exists():
+            logging.info("Config directory does not exist. Creating now.")
+            config_path.mkdir(parents=True)
+
+        if potential_path.exists():
+            logging.exception(f"Error: unique name already in use: {name}")
+            raise ValueError(f"Error: unique name already in use {name}")
+    except (OSError, FileNotFoundError) as e:
+        logging.exception(f"Issue finding config folder: {e}")
+        raise
+
+
 def fill_missing_create_args(args: dict[str, Any]) -> None:
     if args["name"] == NAME_DEFAULT:
         logging.info("No name specified. Setting it based on directory")
@@ -586,6 +607,9 @@ def create_backup_from_args(args_dict: dict[str, Any]) -> None:
 
     if not all([args_dict.get(argument) is not None for argument in required_args]):
         interactive_config_creator(args_dict)
+    check_name_not_duplicate(
+        args_dict["name"]
+    )  # putting the check here unfortunately means that a potential name conflict is only revealed to the user after they're done with the interactive config creator
     fill_missing_create_args(args_dict)
 
     file_path = get_config_path(args_dict["name"])

@@ -1,7 +1,6 @@
 #  parse_functions.py
 #  functions to parse CLI arguments
 
-import os
 import logging
 import re
 import pytimeparse
@@ -15,29 +14,11 @@ CONFIG_LOCATION: str = "~/.config/CronVault/"
 
 
 def parse_name(name: str) -> str:
-    # TODO: Separate this into multiple functions, and move OS logic to *after* parsing
     if not name:
         return NAME_DEFAULT
     if not isinstance(name, str) or len(name) < 1:
-        raise ValueError(f"Invalid directory path: {name}")
-
-    config_folder: str = os.path.expanduser(CONFIG_LOCATION)
-    try:
-        if not os.path.exists(config_folder):
-            logging.info("Config directory does not exist. Creating now.")
-            os.makedirs(config_folder)
-        backups: list[str] | None = os.listdir(config_folder)
-        if (
-            (backups is None)
-            or (name in backups)
-            or (name in map(lambda x: x.replace(".json", ""), backups))
-        ):
-            logging.exception(f"Error: unique name already in use: {name}")
-            raise ValueError(f"Error: unique name already in use {name}")
-        return name
-    except (OSError, FileNotFoundError) as e:
-        logging.exception(f"Issue finding config folder: {e}")
-        raise
+        raise ValueError(f"Invalid config name: {name}")
+    return name
 
 
 def parse_size(value: str | None) -> int:
