@@ -555,9 +555,9 @@ def add_cron_job(config_path: Path = Path(CONFIG_LOCATION).expanduser()) -> None
         raise
 
 
-def check_name_not_duplicate(
+def is_name_duplicate(
     name: str, config_path: Path = Path(CONFIG_LOCATION).expanduser()
-) -> None:
+) -> bool:
     try:
         potential_path = config_path / f"{name}.json"
         if not config_path.exists():
@@ -565,11 +565,12 @@ def check_name_not_duplicate(
             config_path.mkdir(parents=True)
 
         if potential_path.exists():
-            logging.exception(f"Error: unique name already in use: {name}")
-            raise ValueError(f"Error: unique name already in use {name}")
+            logging.info(f"Unique name already in use: {name}")
+            return True
     except (OSError, FileNotFoundError) as e:
-        logging.exception(f"Issue finding config folder: {e}")
+        logging.exception(f"Error raised while checking config folder: {e}")
         raise
+    return False
 
 
 def fill_missing_create_args(args: dict[str, Any]) -> None:
@@ -607,10 +608,15 @@ def create_backup_from_args(args_dict: dict[str, Any]) -> None:
 
     if not all([args_dict.get(argument) is not None for argument in required_args]):
         interactive_config_creator(args_dict)
+
+    while is_name_duplicate(args_dict["name"]):
+        args_dict["name"] = parse_name(
+            input(
+                "Name already taken. Try a new name (or press Enter to use default from path): "
+            )
+        )
+
     fill_missing_create_args(args_dict)
-    check_name_not_duplicate(
-        args_dict["name"]
-    )  # putting the check here unfortunately means that a potential name conflict is only revealed to the user after they're done with the interactive config creator
 
     file_path = get_config_path(args_dict["name"])
     contents = convert_user_args_json(

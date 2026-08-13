@@ -47,15 +47,14 @@ def test_name_unique(tmp_path: Path):
     for filename in ("Backup1.json", "Backup2.json", "Backup3.json"):
         (tmp_path / filename).touch()
 
-    assert CronVault.utils.utils.check_name_not_duplicate("Backup4", tmp_path) is None
+    assert CronVault.utils.utils.is_name_duplicate("Backup4", tmp_path) is False
 
 
 def test_add_duplicate_name(tmp_path: Path):
     for filename in ("Backup1.json", "Backup2.json", "Backup3.json"):
         (tmp_path / filename).touch()
 
-    with pytest.raises(ValueError):
-        CronVault.utils.utils.check_name_not_duplicate("Backup3", tmp_path)
+    assert CronVault.utils.utils.is_name_duplicate("Backup3", tmp_path) is True
 
 
 def test_parse_name_default():

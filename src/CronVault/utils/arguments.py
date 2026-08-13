@@ -25,11 +25,6 @@ class Argument:
 
 create_arguments: list[Argument] = [
     Argument(
-        "name",
-        "• Name to identify this backup (or press Enter to use default name from path): ",
-        parse_name,
-    ),
-    Argument(
         "path",
         "• Path of the folder to back up (or press Enter to use current working directory): ",
         parse_path,
@@ -53,5 +48,10 @@ create_arguments: list[Argument] = [
         "naming_format",
         "• Naming format for backups, strftime syntax. (or press Enter to use default {name} %Y-%m-%d_%H-%M-%S): ",
         parse_name_format,
+    ),
+    Argument(
+        "name",
+        "• Name to identify this backup (or press Enter to use default name from path): ",
+        parse_name,
     ),
 ]
