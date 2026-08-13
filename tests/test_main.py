@@ -154,55 +154,46 @@ def test_parse_time_period_error():
         ("/test/directory with spaces/target/", "target"),
     ],
 )
-def test_default_backup_name(source_directory: str, expected_output: str, mocker):
-    mocker.patch("CronVault.utils.utils.parse_name", side_effect=lambda x: x)
-
+def test_default_backup_name(
+    tmp_path: Path, source_directory: str, expected_output: str
+):
     assert (
-        CronVault.utils.utils.get_default_backup_name(source_directory)
+        CronVault.utils.utils.get_default_backup_name(source_directory, tmp_path)
         == expected_output
     )
 
 
 @pytest.mark.parametrize(
-    "source_directory, expected_output",
+    "source_directory, config_dir_files, expected_output",
     [
-        ("~/TestDirectory/our_target_directory", "our_target_directory_4"),
-        ("~/TestDirectory/our_target_directory/", "our_target_directory_3"),
-        ("/test/", "test_2"),
-        ("ABC", "ABC_1"),
-        ("/test/directory with spaces/target/", "target_4"),
+        (
+            "~/TestDirectory/our_target_directory",
+            [
+                "our_target_directory",
+                "our_target_directory_1",
+                "our_target_directory_2",
+                "our_target_directory_3",
+            ],
+            "our_target_directory_4",
+        ),
+        ("/test/", ["test", "test_1"], "test_2"),
+        ("ABC", ["ABC"], "ABC_1"),
+        (
+            "/test/directory with spaces/target/",
+            ["target", "target_1", "target_2", "target_3"],
+            "target_4",
+        ),
     ],
 )
-def test_default_backup_name_not_unique(
-    #  a recursively mocked test with a closure
-    #  I can't decide if this is the best code I've ever written
-    #  or the absolute worst...
-    mocker,
-    source_directory: str,
-    expected_output: str,
+def test_default_backup_name_not_unique_new(
+    tmp_path: Path, source_directory, config_dir_files, expected_output
 ):
-    def mock_parse_name_generator(expected_output_name: str):
-        def mock_parse_name_specified(name: str):
-            if name == expected_output_name:
-                return name
-            else:
-                raise ValueError(f"Invalid name: {name}")
-
-        return mock_parse_name_specified
-
-    mocker.patch(
-        "CronVault.utils.utils.parse_name",
-        side_effect=mock_parse_name_generator(expected_output),
+    for file in config_dir_files:
+        (tmp_path / f"{file}.json").touch()
+    assert (
+        CronVault.utils.utils.get_default_backup_name(source_directory, tmp_path)
+        == expected_output
     )
-    try:
-        assert (
-            CronVault.utils.utils.get_default_backup_name(source_directory)
-            == expected_output
-        )
-    except RecursionError:
-        raise ValueError(
-            f"Recursion error. {source_directory} never turned into {expected_output}"
-        )
 
 
 def test_convert_args_json():

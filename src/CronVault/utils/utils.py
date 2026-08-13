@@ -30,7 +30,9 @@ DEFAULT_BACKUP_CHECK_INTERVAL_MINUTES: int = 10  #  run check every 10 minutes
 CRON_JOB_COMMENT: str = "Automated CronVault check. Minute frequency:"
 
 
-def get_default_backup_name(directory: str) -> str:
+def get_default_backup_name(
+    directory: str, config_path: Path = Path(CONFIG_LOCATION).expanduser()
+) -> str:
     """Return appropriate default name when user has not set it. By default set to last element of the path. Appended with `_num` until it's unique
 
     Args:
@@ -46,14 +48,12 @@ def get_default_backup_name(directory: str) -> str:
     last_path_elm = directory_path.name
     count: int = 0
     while count < MAX_NAME_ATTEMPTS:
-        try:
-            name_to_try: str = (
-                last_path_elm if count == 0 else last_path_elm + f"_{count}"
-            )
-            if parse_name(name_to_try) == name_to_try:
-                return name_to_try
-        except ValueError:
-            count += 1
+        name_to_try: str = last_path_elm if count == 0 else f"{last_path_elm}_{count}"
+        logging.info(f"Checking if name {name_to_try} is unique")
+        if not is_name_duplicate(name_to_try, config_path):
+            logging.info(f"Name {name_to_try} is unique. Returning it.")
+            return name_to_try
+        count += 1
     return ""
 
 
@@ -574,12 +574,12 @@ def is_name_duplicate(
 
 
 def fill_missing_create_args(args: dict[str, Any]) -> None:
-    if args["name"] == NAME_DEFAULT:
+    if args["name"] is None or args["name"] == NAME_DEFAULT:
         logging.info("No name specified. Setting it based on directory")
         args["name"] = get_default_backup_name(args["path"])
         logging.info(f"Backup name now set to {args['name']}")
 
-    if args["naming_format"] == NAME_DEFAULT:
+    if args["naming_format"] is None or args["naming_format"] == NAME_DEFAULT:
         logging.info("No naming format specified. Setting it based on name")
         args["naming_format"] = f"{args['name']} %Y-%m-%d_%H-%M-%S"
         logging.info(f"Backup naming scheme now set to {args['naming_format']}")
@@ -609,14 +609,13 @@ def create_backup_from_args(args_dict: dict[str, Any]) -> None:
     if not all([args_dict.get(argument) is not None for argument in required_args]):
         interactive_config_creator(args_dict)
 
+    fill_missing_create_args(args_dict)
     while is_name_duplicate(args_dict["name"]):
         args_dict["name"] = parse_name(
             input(
                 "Name already taken. Try a new name (or press Enter to use default from path): "
             )
         )
-
-    fill_missing_create_args(args_dict)
 
     file_path = get_config_path(args_dict["name"])
     contents = convert_user_args_json(
