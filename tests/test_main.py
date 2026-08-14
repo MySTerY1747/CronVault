@@ -37,7 +37,8 @@ def test_cli_args():
         "-t",
         "--time-period",
     ]
-    help_command: str = "cronvault create -h"
+    #  I'm not using `cronvault` here, because it would break the CI/CD pipeline on GitHub
+    help_command: str = "python3 src/CronVault/main.py create -h"
     result: str = os.popen(help_command).read()
     for option in options:
         assert option in result.lower()
@@ -905,3 +906,228 @@ def test_add_cron_job_does_not_create_duplicate(mocker, tmp_path: Path):
 
 def test_parse_path_empty_uses_current_directory():
     assert CronVault.utils.parse_functions.parse_path("") == str(Path.cwd())
+
+
+def test_fill_missing_create_args_default_values(mocker, tmp_path):
+    mock_get_default_backup = mocker.patch(
+        "CronVault.utils.utils.get_default_backup_name"
+    )
+    mock_get_default_backup.return_value = "expected"
+
+    args = {
+        "name": CronVault.utils.parse_functions.NAME_DEFAULT,
+        "naming_format": CronVault.utils.parse_functions.NAME_DEFAULT,
+        "path": Path("."),
+    }
+
+    CronVault.utils.utils.fill_missing_create_args(args, tmp_path)
+
+    mock_get_default_backup.assert_called_once_with(args["path"], tmp_path)
+    assert args["naming_format"] == "expected %Y-%m-%d_%H-%M-%S"
+
+
+def test_fill_missing_create_args_none_values(mocker, tmp_path):
+    mock_get_default_backup = mocker.patch(
+        "CronVault.utils.utils.get_default_backup_name"
+    )
+    mock_get_default_backup.return_value = "expected"
+
+    args = {
+        "name": None,
+        "naming_format": None,
+        "path": Path("."),
+    }
+
+    CronVault.utils.utils.fill_missing_create_args(args, tmp_path)
+
+    mock_get_default_backup.assert_called_once_with(args["path"], tmp_path)
+    assert args["naming_format"] == "expected %Y-%m-%d_%H-%M-%S"
+
+
+def test_interactive_config_creator_all_values_already_present():
+    #  parser functions should not be run here, so input doesn't actually need to be valid
+    args = {
+        "name": "test",
+        "max_backup_size": 500,
+        "path": "test",
+        "naming_format": "test",
+        "destination": "test",
+        "time_period": 500,
+    }
+
+    args_copy = args.copy()
+
+    CronVault.utils.utils.interactive_config_creator(args_copy)
+    assert args == args_copy
+
+
+def test_interactive_config_creator_no_values_present(mocker, tmp_path):
+    mock_input = mocker.patch("CronVault.utils.utils.input")
+    mock_input.side_effect = [tmp_path, tmp_path, "5M", "", "test", "test"]
+
+    args = {}
+
+    CronVault.utils.utils.interactive_config_creator(args)
+    assert mock_input.call_count == 6
+    assert args == {
+        "name": "test",
+        "max_backup_size": CronVault.utils.parse_functions.FIFTY_GB,
+        "path": str(tmp_path),
+        "naming_format": "test",
+        "destination": str(tmp_path),
+        "time_period": 300,
+    }
+
+
+def test_create_backup_from_args_all_params_given(tmp_path: Path, mocker):
+    mock_interactive_config_creator = mocker.patch(
+        "CronVault.utils.utils.interactive_config_creator"
+    )
+    args = {
+        "name": "test",
+        "max_backup_size": CronVault.utils.parse_functions.FIFTY_GB,
+        "path": str(tmp_path),
+        "naming_format": "test",
+        "destination": str(tmp_path),
+        "time_period": 300,
+    }
+
+    CronVault.utils.utils.create_backup_from_args(args, tmp_path)
+
+    args["name_format"] = args.pop("naming_format")
+    args["last_known_backup"] = None
+    args["status"] = "active"
+    args["total_backup_count"] = 0
+
+    mock_interactive_config_creator.assert_not_called()
+    config_location = tmp_path / f"{args['name']}.json"
+    assert config_location.exists()
+    config_dict = loads(config_location.read_text())
+    assert config_dict == args
+    assert config_dict["name_format"] == "test"
+
+
+def test_create_backup_from_args_all_params_given_duplicate_name(
+    tmp_path: Path, mocker
+):
+    mock_interactive_config_creator = mocker.patch(
+        "CronVault.utils.utils.interactive_config_creator"
+    )
+    mock_input = mocker.patch("CronVault.utils.utils.input")
+    mock_input.return_value = "new_name"
+
+    args = {
+        "name": "test",
+        "max_backup_size": CronVault.utils.parse_functions.FIFTY_GB,
+        "path": str(tmp_path),
+        "naming_format": None,
+        "destination": str(tmp_path),
+        "time_period": 300,
+    }
+
+    (tmp_path / f"{args['name']}.json").touch()
+
+    CronVault.utils.utils.create_backup_from_args(args, tmp_path)
+
+    args["name"] = "new_name"
+    args["name_format"] = args.pop("naming_format")
+    args["last_known_backup"] = None
+    args["status"] = "active"
+    args["total_backup_count"] = 0
+
+    mock_interactive_config_creator.assert_not_called()
+    config_location = tmp_path / f"{args['name']}.json"
+    assert config_location.exists()
+    config_dict = loads(config_location.read_text())
+    assert config_dict == args
+    assert config_dict["name_format"] == f"{args['name']} %Y-%m-%d_%H-%M-%S"
+
+
+def test_create_backup_from_args_all_required_params_given_except_name(
+    tmp_path: Path, mocker
+):
+    sub_path = tmp_path / "test"
+    sub_path.mkdir()
+    mock_interactive_config_creator = mocker.patch(
+        "CronVault.utils.utils.interactive_config_creator"
+    )
+    mock_input = mocker.patch("CronVault.utils.utils.input")
+
+    args = {
+        "name": None,  #  missing CLI args are automatically set to None
+        "max_backup_size": CronVault.utils.parse_functions.FIFTY_GB,
+        "path": str(sub_path),
+        "naming_format": None,
+        "destination": str(sub_path),
+        "time_period": 300,
+    }
+
+    (tmp_path / "test.json").touch()
+
+    CronVault.utils.utils.create_backup_from_args(args, tmp_path)
+
+    args["name"] = "test_1"
+    args["name_format"] = args.pop("naming_format")
+    args["last_known_backup"] = None
+    args["status"] = "active"
+    args["total_backup_count"] = 0
+
+    mock_interactive_config_creator.assert_not_called()
+    mock_input.assert_not_called()
+    config_location = tmp_path / "test_1.json"
+    assert config_location.exists()
+    config_file_dict = loads(config_location.read_text())
+    assert config_file_dict == args
+    assert config_file_dict["name_format"] == f"{args['name']} %Y-%m-%d_%H-%M-%S"
+
+
+def test_create_backup_from_args_no_params(tmp_path: Path, mocker):
+    (tmp_path / "exists.json").touch()
+    (tmp_path / "exists_too.json").touch()
+    mock_input = mocker.patch("CronVault.utils.utils.input")
+    mock_input.side_effect = [
+        str(tmp_path),
+        str(tmp_path),
+        "1500 seconds",
+        "",
+        "exists",
+        "exists",
+        "exists_too",
+        "expected",
+    ]
+
+    args = {
+        "name": None,  #  missing CLI args are automatically set to None
+        "max_backup_size": CronVault.utils.parse_functions.FIFTY_GB,  # default value
+        "path": None,
+        "naming_format": None,
+        "destination": None,
+        "time_period": None,
+    }
+
+    CronVault.utils.utils.create_backup_from_args(args, tmp_path)
+
+    args["name"] = "expected"
+    args.pop("naming_format")
+    args["name_format"] = "expected %Y-%m-%d_%H-%M-%S"
+    args["last_known_backup"] = None
+    args["status"] = "active"
+    args["total_backup_count"] = 0
+    args = {
+        "name": "expected",
+        "name_format": "expected %Y-%m-%d_%H-%M-%S",
+        "last_known_backup": None,
+        "status": "active",
+        "total_backup_count": 0,
+        "max_backup_size": CronVault.utils.parse_functions.FIFTY_GB,
+        "path": str(tmp_path),
+        "destination": str(tmp_path),
+        "time_period": 1500,
+    }
+
+    assert mock_input.call_count == 8
+    config_location = tmp_path / "expected.json"
+    assert config_location.exists()
+    config_file_dict = loads(config_location.read_text())
+    assert config_file_dict == args
+    assert config_file_dict["name_format"] == f"{args['name']} %Y-%m-%d_%H-%M-%S"

@@ -570,13 +570,16 @@ def is_name_duplicate(
     except (OSError, FileNotFoundError) as e:
         logging.exception(f"Error raised while checking config folder: {e}")
         raise
+    logging.info(f"Name {name} is unique. {potential_path} does not exist.")
     return False
 
 
-def fill_missing_create_args(args: dict[str, Any]) -> None:
+def fill_missing_create_args(
+    args: dict[str, Any], config_path: Path = Path(CONFIG_LOCATION).expanduser()
+) -> None:
     if args["name"] is None or args["name"] == NAME_DEFAULT:
         logging.info("No name specified. Setting it based on directory")
-        args["name"] = get_default_backup_name(args["path"])
+        args["name"] = get_default_backup_name(args["path"], config_path)
         logging.info(f"Backup name now set to {args['name']}")
 
     if args["naming_format"] is None or args["naming_format"] == NAME_DEFAULT:
@@ -603,21 +606,30 @@ def interactive_config_creator(args: dict[str, Any]) -> None:
         print("=" * 40 + "\n")
 
 
-def create_backup_from_args(args_dict: dict[str, Any]) -> None:
+def create_backup_from_args(
+    args_dict: dict[str, Any], config_path: Path = Path(CONFIG_LOCATION).expanduser()
+) -> None:
     required_args = ("path", "destination", "time_period")
 
     if not all([args_dict.get(argument) is not None for argument in required_args]):
+        logging.info(
+            "One or more required arguments missing. Starting interactive config creator"
+        )
         interactive_config_creator(args_dict)
 
-    fill_missing_create_args(args_dict)
-    while is_name_duplicate(args_dict["name"]):
+    using_default_name_format = args_dict["naming_format"] in {NAME_DEFAULT, None}
+    fill_missing_create_args(args_dict, config_path)
+    while is_name_duplicate(args_dict["name"], config_path):
         args_dict["name"] = parse_name(
             input(
                 "Name already taken. Try a new name (or press Enter to use default from path): "
             )
         )
+        if using_default_name_format:
+            args_dict["naming_format"] = NAME_DEFAULT
+            fill_missing_create_args(args_dict)
 
-    file_path = get_config_path(args_dict["name"])
+    file_path = get_config_path(args_dict["name"], config_path)
     contents = convert_user_args_json(
         args_dict["name"],
         args_dict["max_backup_size"],
