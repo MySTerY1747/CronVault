@@ -627,7 +627,7 @@ def create_backup_from_args(
         )
         if using_default_name_format:
             args_dict["naming_format"] = NAME_DEFAULT
-            fill_missing_create_args(args_dict)
+            fill_missing_create_args(args_dict, config_path)
 
     file_path = get_config_path(args_dict["name"], config_path)
     contents = convert_user_args_json(

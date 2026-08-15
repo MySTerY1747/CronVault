@@ -180,5 +180,4 @@ if __name__ == "__main__":
 
     logging.info("Handler function complete. Exiting...")
 
-    # TODO: Add integration test for `create`
     # TODO: Refactor into multiple files. Consider using an object instead of dictionaries
