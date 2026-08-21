@@ -181,3 +181,4 @@ if __name__ == "__main__":
     logging.info("Handler function complete. Exiting...")
 
     # TODO: Refactor into multiple files. Consider using an object instead of dictionaries
+    # TODO: Add a mechanism for multiple types of backup, e.g. ZIP, Rsync, etc
