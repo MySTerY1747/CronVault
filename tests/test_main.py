@@ -3,6 +3,8 @@
 
 from json import dumps, loads
 import os
+import subprocess
+import sys
 from unittest.mock import MagicMock
 from CronVault.cli.parse_functions import (
     parse_name,
@@ -54,8 +56,12 @@ def test_help():
     blurb: str = (
         "CronVault - Flexible Python-based backup automation tool via cron jobs"
     )
-    help_command: str = "python3 src/CronVault/main.py -h"
-    result: str = os.popen(help_command).read()
+    result = subprocess.run(
+        [sys.executable, "-m", "CronVault.main", "-h"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
     assert blurb in result
 
 
@@ -76,9 +82,12 @@ def test_cli_args():
         "-t",
         "--time-period",
     ]
-    #  I'm not using `cronvault` here, because it would break the CI/CD pipeline on GitHub
-    help_command: str = "python3 src/CronVault/main.py create -h"
-    result: str = os.popen(help_command).read()
+    result = subprocess.run(
+        [sys.executable, "-m", "CronVault.main", "create", "-h"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
     for option in options:
         assert option in result.lower()
 
