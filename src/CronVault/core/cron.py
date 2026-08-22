@@ -3,8 +3,8 @@
 
 import logging
 import re
-from .constants import CRON_JOB_COMMENT, CONFIG_LOCATION
-from .config import get_backup_frequency_from_config
+from CronVault.core.constants import CRON_JOB_COMMENT, CONFIG_LOCATION
+from CronVault.core.config import get_backup_frequency_from_config
 from pathlib import Path
 from crontab import CronTab, CronItem
 
@@ -67,3 +67,7 @@ def add_cron_job(config_path: Path = Path(CONFIG_LOCATION).expanduser()) -> None
     except OSError as e:
         logging.exception(f"Got OSError while going through Cron jobs: {e}")
         raise
+
+
+if __name__ == "__main__":
+    pass

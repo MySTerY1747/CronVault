@@ -10,3 +10,6 @@ CRON_JOB_COMMENT: str = "Automated CronVault check. Minute frequency:"
 NAME_DEFAULT: str = "NoName"
 FIFTY_GB: int = 53_687_091_200  #  50GB
 CONFIG_LOCATION: str = "~/.config/CronVault/"
+
+if __name__ == "__main__":
+    pass

@@ -5,7 +5,7 @@
 from dataclasses import dataclass
 from typing import Callable
 
-from .parse_functions import (
+from CronVault.cli.parse_functions import (
     parse_name,
     parse_name_format,
     parse_path,
@@ -55,3 +55,6 @@ create_arguments: list[Argument] = [
         parse_name,
     ),
 ]
+
+if __name__ == "__main__":
+    pass

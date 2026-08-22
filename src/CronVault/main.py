@@ -7,7 +7,7 @@ import colorama
 from logging import Logger
 from typing import Callable
 
-from core.config import (
+from CronVault.core.config import (
     change_backup_status,
     delete_backup,
     get_all_backups,
@@ -16,10 +16,10 @@ from core.config import (
     filter_configs_inactive,
     create_backup_from_args,
 )
-from core.backup import run_backup_if_needed
-from core.cron import add_cron_job
+from CronVault.core.backup import run_backup_if_needed
+from CronVault.core.cron import add_cron_job
 
-from cli.parse_functions import (
+from CronVault.cli.parse_functions import (
     parse_name,
     parse_size,
     parse_name_format,

@@ -8,12 +8,12 @@ import shutil
 import pathvalidate
 from datetime import datetime
 from pathlib import Path
-from .constants import (
+from CronVault.core.constants import (
     CONFIG_LOCATION,
     CRONVAULT_MARKER_FILENAME,
     MAX_DELETE_OLD_BACKUP_ATTEMPTS,
 )
-from .config_json_schema import SCHEMA
+from CronVault.core.config_json_schema import SCHEMA
 from jsonschema import validate, FormatChecker, ValidationError
 from typing import Any
 
@@ -239,3 +239,7 @@ def perform_backup(config: dict[str, Any], path_override: Path | None = None) ->
                 logging.info("Failed to clean up. Exiting.")
             return False
         raise
+
+
+if __name__ == "__main__":
+    pass

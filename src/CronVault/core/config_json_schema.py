@@ -36,3 +36,6 @@ SCHEMA = {
         "status": {"type": "string", "enum": ["inactive", "active"]},
     },
 }
+
+if __name__ == "__main__":
+    pass

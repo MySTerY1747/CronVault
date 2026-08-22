@@ -424,7 +424,7 @@ def test_get_directory_size_with_subdirectories(tmp_path):
 
 
 def test_run_backup_if_needed(single_valid_config_directory, mocker):
-    mock_perform_backup = mocker.patch("perform_backup")
+    mock_perform_backup = mocker.patch("CronVault.core.backup.perform_backup")
     mock_perform_backup.return_value = True
 
     initial_config_contents = loads(
@@ -453,7 +453,7 @@ def test_run_backup_file_edge_cases(populated_config_directory, mocker, caplog):
     #  documents should be backed up, same with notes
     #  photos, music, projects should not (photos & music inactive, projects active but recently backed up)
     #  Broken/invalid files should be skipped
-    mock_perform_backup = mocker.patch("perform_backup")
+    mock_perform_backup = mocker.patch("CronVault.core.backup.perform_backup")
     mock_perform_backup.return_value = True
 
     all_filenames = [
@@ -482,7 +482,7 @@ def test_run_backup_file_edge_cases(populated_config_directory, mocker, caplog):
 
 def test_run_backup_forced(populated_config_directory, mocker, caplog):
     #  test that all backups are performed, despite elapsed-time or activity status, when forced flag True
-    mock_perform_backup = mocker.patch("perform_backup")
+    mock_perform_backup = mocker.patch("CronVault.core.backup.perform_backup")
     mock_perform_backup.return_value = True
 
     all_filenames = [
@@ -507,7 +507,7 @@ def test_run_backup_forced(populated_config_directory, mocker, caplog):
 
 
 def test_run_backup_if_needed_perform_fails(populated_config_directory, mocker):
-    mock_perform_backup = mocker.patch("perform_backup")
+    mock_perform_backup = mocker.patch("CronVault.core.backup.perform_backup")
     mock_perform_backup.return_value = False
 
     initial_config_contents = loads(
@@ -594,10 +594,12 @@ def test_perform_backup_invalid_path(single_valid_config_directory, caplog):
 def test_perform_backup_enough_storage_doesnt_call_find_oldest_backup(
     single_valid_config_directory, mocker
 ):
-    mock_find_oldest_backup = mocker.patch("find_oldest_backup")
-    mock_get_device_storage = mocker.patch("get_device_free_space")
+    mock_find_oldest_backup = mocker.patch("CronVault.core.backup.find_oldest_backup")
+    mock_get_device_storage = mocker.patch(
+        "CronVault.core.backup.get_device_free_space"
+    )
     mock_get_device_storage.return_value = 10_000_000_000_000_000_000
-    mock_get_directory_size = mocker.patch("get_directory_size")
+    mock_get_directory_size = mocker.patch("CronVault.core.backup.get_directory_size")
     mock_get_directory_size.side_effect = [1500, 3000]
 
     config = loads((single_valid_config_directory / "documents.json").read_text())
@@ -609,9 +611,11 @@ def test_perform_backup_enough_storage_doesnt_call_find_oldest_backup(
 
 
 def test_perform_backup_lack_storage_exits(single_valid_config_directory, mocker):
-    mock_get_device_storage = mocker.patch("get_device_free_space")
+    mock_get_device_storage = mocker.patch(
+        "CronVault.core.backup.get_device_free_space"
+    )
     mock_get_device_storage.return_value = 10_000_000_000_000_000_000
-    mock_get_directory_size = mocker.patch("get_directory_size")
+    mock_get_directory_size = mocker.patch("CronVault.core.backup.get_directory_size")
     mock_get_directory_size.side_effect = [
         35_000_000_000,
         48_000_000_000,
@@ -649,10 +653,12 @@ def test_perform_backup_lack_storage_exits(single_valid_config_directory, mocker
 def test_perform_backup_deletes_old_backups_and_correctly_copies_data(
     single_valid_config_directory, mocker
 ):
-    mock_get_device_storage = mocker.patch("get_device_free_space")
-    mock_copy_into = mocker.patch("Path.copy_into")
+    mock_get_device_storage = mocker.patch(
+        "CronVault.core.backup.get_device_free_space"
+    )
+    mock_copy_into = mocker.patch("CronVault.core.backup.Path.copy_into")
     mock_get_device_storage.return_value = 10_000_000_000_000_000_000
-    mock_get_directory_size = mocker.patch("get_directory_size")
+    mock_get_directory_size = mocker.patch("CronVault.core.backup.get_directory_size")
     mock_get_directory_size.side_effect = [
         35_000_000_000,
         48_000_000_000,
@@ -688,9 +694,11 @@ def test_perform_backup_deletes_old_backups_and_correctly_copies_data(
 
 
 def test_perform_backup_nonexistent_destination(single_valid_config_directory, mocker):
-    mock_get_device_storage = mocker.patch("get_device_free_space")
+    mock_get_device_storage = mocker.patch(
+        "CronVault.core.backup.get_device_free_space"
+    )
     mock_get_device_storage.return_value = 10_000_000_000_000_000_000
-    mock_get_directory_size = mocker.patch("get_directory_size")
+    mock_get_directory_size = mocker.patch("CronVault.core.backup.get_directory_size")
     mock_get_directory_size.return_value = 4_000_000_000
 
     config = loads((single_valid_config_directory / "documents.json").read_text())
@@ -703,12 +711,14 @@ def test_perform_backup_nonexistent_destination(single_valid_config_directory, m
 def test_perform_backup_calls_cleanup_when_OSERROR_raised(
     single_valid_config_directory, mocker
 ):
-    mock_get_device_storage = mocker.patch("get_device_free_space")
-    mock_cleanup = mocker.patch("cleanup_failed_backup")
-    mock_copy_into = mocker.patch("Path.copy_into")
+    mock_get_device_storage = mocker.patch(
+        "CronVault.core.backup.get_device_free_space"
+    )
+    mock_cleanup = mocker.patch("CronVault.core.backup.cleanup_failed_backup")
+    mock_copy_into = mocker.patch("CronVault.core.backup.Path.copy_into")
     mock_copy_into.side_effect = OSError("Copy failed")
     mock_get_device_storage.return_value = 10_000_000_000_000_000_000
-    mock_get_directory_size = mocker.patch("get_directory_size")
+    mock_get_directory_size = mocker.patch("CronVault.core.backup.get_directory_size")
     mock_get_directory_size.return_value = 4_000_000_000
 
     config = loads((single_valid_config_directory / "documents.json").read_text())
@@ -835,9 +845,11 @@ def test_ensure_single_cron_job_malformed_comment():
 
 
 def test_add_cron_job_creates_job(mocker, tmp_path: Path):
-    mock_get_frequency = mocker.patch("get_backup_frequency_from_config")
-    mock_ensure_job = mocker.patch("ensure_single_cron_job")
-    mock_crontab = mocker.patch("CronTab")
+    mock_get_frequency = mocker.patch(
+        "CronVault.core.cron.get_backup_frequency_from_config"
+    )
+    mock_ensure_job = mocker.patch("CronVault.core.cron.ensure_single_cron_job")
+    mock_crontab = mocker.patch("CronVault.core.cron.CronTab")
     mock_get_frequency.return_value = 10
     mock_ensure_job.return_value = False
     cron = mock_crontab.return_value
@@ -856,9 +868,11 @@ def test_add_cron_job_creates_job(mocker, tmp_path: Path):
 
 
 def test_add_cron_job_does_not_create_duplicate(mocker, tmp_path: Path):
-    mock_get_frequency = mocker.patch("get_backup_frequency_from_config")
-    mock_ensure_job = mocker.patch("ensure_single_cron_job")
-    mock_crontab = mocker.patch("CronTab")
+    mock_get_frequency = mocker.patch(
+        "CronVault.core.cron.get_backup_frequency_from_config"
+    )
+    mock_ensure_job = mocker.patch("CronVault.core.cron.ensure_single_cron_job")
+    mock_crontab = mocker.patch("CronVault.core.cron.CronTab")
 
     mock_get_frequency.return_value = 10
     mock_ensure_job.return_value = True
@@ -883,7 +897,9 @@ def test_parse_path_empty_uses_current_directory():
 
 
 def test_fill_missing_create_args_default_values(mocker, tmp_path):
-    mock_get_default_backup = mocker.patch("get_default_backup_name")
+    mock_get_default_backup = mocker.patch(
+        "CronVault.core.config.get_default_backup_name"
+    )
     mock_get_default_backup.return_value = "expected"
 
     args = {
@@ -899,7 +915,9 @@ def test_fill_missing_create_args_default_values(mocker, tmp_path):
 
 
 def test_fill_missing_create_args_none_values(mocker, tmp_path):
-    mock_get_default_backup = mocker.patch("get_default_backup_name")
+    mock_get_default_backup = mocker.patch(
+        "CronVault.core.config.get_default_backup_name"
+    )
     mock_get_default_backup.return_value = "expected"
 
     args = {
@@ -932,7 +950,7 @@ def test_interactive_config_creator_all_values_already_present():
 
 
 def test_interactive_config_creator_no_values_present(mocker, tmp_path):
-    mock_input = mocker.patch("input")
+    mock_input = mocker.patch("CronVault.core.config.input")
     mock_input.side_effect = [tmp_path, tmp_path, "5M", "", "test", "test"]
 
     args = {}
@@ -950,7 +968,9 @@ def test_interactive_config_creator_no_values_present(mocker, tmp_path):
 
 
 def test_create_backup_from_args_all_params_given(tmp_path: Path, mocker):
-    mock_interactive_config_creator = mocker.patch("interactive_config_creator")
+    mock_interactive_config_creator = mocker.patch(
+        "CronVault.core.config.interactive_config_creator"
+    )
     args = {
         "name": "test",
         "max_backup_size": FIFTY_GB,
@@ -978,8 +998,10 @@ def test_create_backup_from_args_all_params_given(tmp_path: Path, mocker):
 def test_create_backup_from_args_all_params_given_duplicate_name(
     tmp_path: Path, mocker
 ):
-    mock_interactive_config_creator = mocker.patch("interactive_config_creator")
-    mock_input = mocker.patch("input")
+    mock_interactive_config_creator = mocker.patch(
+        "CronVault.core.config.interactive_config_creator"
+    )
+    mock_input = mocker.patch("CronVault.core.config.input")
     mock_input.return_value = "new_name"
 
     args = {
@@ -1014,8 +1036,10 @@ def test_create_backup_from_args_all_required_params_given_except_name(
 ):
     sub_path = tmp_path / "test"
     sub_path.mkdir()
-    mock_interactive_config_creator = mocker.patch("interactive_config_creator")
-    mock_input = mocker.patch("input")
+    mock_interactive_config_creator = mocker.patch(
+        "CronVault.core.config.interactive_config_creator"
+    )
+    mock_input = mocker.patch("CronVault.core.config.input")
 
     args = {
         "name": None,  #  missing CLI args are automatically set to None
@@ -1048,7 +1072,7 @@ def test_create_backup_from_args_all_required_params_given_except_name(
 def test_create_backup_from_args_no_params(tmp_path: Path, mocker):
     (tmp_path / "exists.json").touch()
     (tmp_path / "exists_too.json").touch()
-    mock_input = mocker.patch("input")
+    mock_input = mocker.patch("CronVault.core.config.input")
     mock_input.side_effect = [
         str(tmp_path),
         str(tmp_path),

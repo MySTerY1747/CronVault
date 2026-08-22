@@ -5,16 +5,16 @@ from pathlib import Path
 import logging
 import send2trash
 import json
-from .constants import (
+from CronVault.core.constants import (
     CONFIG_LOCATION,
     MAX_NAME_ATTEMPTS,
     NAME_DEFAULT,
     CONFIG_FILE_NAME,
     DEFAULT_BACKUP_CHECK_INTERVAL_MINUTES,
 )
-from cli.arguments import create_arguments
-from cli.parse_functions import parse_name
-from .config_json_schema import SCHEMA
+from CronVault.cli.arguments import create_arguments
+from CronVault.cli.parse_functions import parse_name
+from CronVault.core.config_json_schema import SCHEMA
 from typing import Any
 from colorama import Fore, Style
 from jsonschema import validate, FormatChecker, ValidationError
