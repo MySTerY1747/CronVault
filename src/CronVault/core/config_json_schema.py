@@ -1,5 +1,5 @@
-#  json_schema.py
-#  holds the schema used to validate JSON config files
+#  config_json_schema.py
+#  contains the JSON schema used to validate configs
 
 SCHEMA = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -36,3 +36,6 @@ SCHEMA = {
         "status": {"type": "string", "enum": ["inactive", "active"]},
     },
 }
+
+if __name__ == "__main__":
+    pass

@@ -3,28 +3,29 @@
 
 import logging
 import argparse
+import colorama
 from logging import Logger
 from typing import Callable
 
-from utils.utils import (
-    add_cron_job,
+from CronVault.core.config import (
     change_backup_status,
     delete_backup,
     get_all_backups,
     print_configs,
-    run_backup_if_needed,
     filter_configs_active,
     filter_configs_inactive,
     create_backup_from_args,
 )
-from utils.parse_functions import (
+from CronVault.core.backup import run_backup_if_needed
+from CronVault.core.cron import add_cron_job
+
+from CronVault.cli.parse_functions import (
     parse_name,
     parse_size,
     parse_name_format,
     parse_path,
     parse_time_period,
 )
-import colorama
 
 if __name__ == "__main__":
     colorama.init(autoreset=True)

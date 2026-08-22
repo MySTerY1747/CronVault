@@ -96,3 +96,7 @@ def parse_time_period(time_period: str) -> int:
         raise ValueError(f"Invalid time period: {time_period}")
 
     return int(total_seconds)
+
+
+if __name__ == "__main__":
+    pass

@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "CronVault"
+version = "0.1.0"
+dependencies = [
+  #  using requirements.txt for now
+]
+
+[project.scripts]
+cronvault = "CronVault.main:main"
