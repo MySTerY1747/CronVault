@@ -160,7 +160,7 @@ if __name__ == "__main__":
         if args.all:
             configs = filter_configs_active(get_all_backups())
             for config in configs:
-                run_backup_if_needed(config["name"], skip_checks=args.force)
+                run_backup_if_needed(config.name, skip_checks=args.force)
         else:
             for name in args.names:
                 run_backup_if_needed(name, skip_checks=args.force)
@@ -181,5 +181,4 @@ if __name__ == "__main__":
 
     logging.info("Handler function complete. Exiting...")
 
-    # TODO: Refactor into multiple files. Consider using an object instead of dictionaries
     # TODO: Add a mechanism for multiple types of backup, e.g. ZIP, Rsync, etc

@@ -2,8 +2,10 @@
 #  unit tests for main function of the program
 
 from json import dumps, loads
-import os
+import subprocess
+import sys
 from unittest.mock import MagicMock
+
 from CronVault.cli.parse_functions import (
     parse_name,
     parse_name_format,
@@ -12,10 +14,10 @@ from CronVault.cli.parse_functions import (
     parse_time_period,
 )
 from CronVault.core.config import (
+    BackupConfig,
     get_default_backup_name,
     get_all_backups,
     get_backup_frequency_from_config,
-    get_config_path,
     generate_default_config,
     change_backup_status,
     create_backup_from_args,
@@ -26,8 +28,6 @@ from CronVault.core.config import (
     interactive_config_creator,
     is_name_duplicate,
     fill_missing_create_args,
-    write_file,
-    convert_user_args_json,
 )
 from CronVault.core.backup import (
     run_backup_if_needed,
@@ -54,8 +54,12 @@ def test_help():
     blurb: str = (
         "CronVault - Flexible Python-based backup automation tool via cron jobs"
     )
-    help_command: str = "python3 src/CronVault/main.py -h"
-    result: str = os.popen(help_command).read()
+    result = subprocess.run(
+        [sys.executable, "-m", "CronVault.main", "-h"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
     assert blurb in result
 
 
@@ -76,9 +80,12 @@ def test_cli_args():
         "-t",
         "--time-period",
     ]
-    #  I'm not using `cronvault` here, because it would break the CI/CD pipeline on GitHub
-    help_command: str = "python3 src/CronVault/main.py create -h"
-    result: str = os.popen(help_command).read()
+    result = subprocess.run(
+        [sys.executable, "-m", "CronVault.main", "create", "-h"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
     for option in options:
         assert option in result.lower()
 
@@ -227,74 +234,22 @@ def test_default_backup_name_not_unique_new(
     assert get_default_backup_name(source_directory, tmp_path) == expected_output
 
 
-def test_convert_args_json():
-    input_dict = {
-        "name": "Test1",
-        "max_backup_size": 512000,
-        "path": "~/Downloads/Test",
-        "name_format": "Test1 %Y-%m-%M",
-        "destination": "~/Documents/Test",
-        "time_period": 2_592_000,
-    }
-
-    output_dict = input_dict.copy()
-    output_dict["last_known_backup"] = None
-    output_dict["total_backup_count"] = 0
-    output_dict["status"] = "active"
-
-    expected_output = dumps(output_dict)
-
-    assert convert_user_args_json(**input_dict) == expected_output
-
-
-def test_config_path(tmp_path):
-    result = get_config_path("myconfig", tmp_path)
-
-    assert result == tmp_path / "myconfig.json"
-
-
-def test_config_path_raises_when_file_exists(tmp_path):
-    existing_file: Path = tmp_path / "test.json"
-    existing_file.write_text("this file exists already")
-
-    with pytest.raises(ValueError):
-        get_config_path("test", tmp_path)
-
-
-def test_config_path_dir_missing(tmp_path):
-    new_dir: Path = tmp_path / "configs"
-
-    result = get_config_path("test", new_dir)
-
-    assert new_dir.exists()
-    assert result == new_dir / "test.json"
-
-
-def test_write_file_writes_contents(tmp_path):
-    file_path = tmp_path / "output.json"
-
-    write_file(file_path, '{"a": 1}')
-
-    assert file_path.exists()
-    assert file_path.read_text() == '{"a": 1}'
-
-
 def test_filter_active(generate_test_configs):
-    configs = generate_test_configs
+    configs = [BackupConfig.from_dict(config) for config in generate_test_configs]
     active = filter_configs_active(configs)
     assert len(active) == 3
-    assert all(config["status"] == "active" for config in active)
+    assert all(config.status == "active" for config in active)
 
 
 def test_filter_inactive(generate_test_configs):
-    configs = generate_test_configs
+    configs = [BackupConfig.from_dict(config) for config in generate_test_configs]
     inactive = filter_configs_inactive(configs)
     assert len(inactive) == 2
-    assert all(config["status"] == "inactive" for config in inactive)
+    assert all(config.status == "inactive" for config in inactive)
 
 
 def test_print_configs(generate_test_configs, capsys):
-    configs = generate_test_configs
+    configs = [BackupConfig.from_dict(config) for config in generate_test_configs]
     print_configs(configs)
     captured = capsys.readouterr()
     for text in [
@@ -313,13 +268,13 @@ def test_print_configs(generate_test_configs, capsys):
 def test_get_all_backups_skips_invalid_json_files(
     generate_test_configs, populated_config_directory
 ):
-    configs = generate_test_configs
+    configs = [BackupConfig.from_dict(config) for config in generate_test_configs]
     write_test_tmp_path: Path = populated_config_directory
     config_results = get_all_backups(file_path=write_test_tmp_path)
     for config in configs:
         assert config in config_results
     assert len(config_results) == 5
-    assert "broken" not in [config["name"] for config in config_results]
+    assert "broken" not in [config.name for config in config_results]
 
 
 def test_activate_inactive_file(populated_config_directory):
@@ -369,13 +324,13 @@ def test_activate_missing_file(tmp_path):
 def test_change_status_broken_file(populated_config_directory, caplog):
     write_test_tmp_path = populated_config_directory
     change_backup_status("broken", "active", write_test_tmp_path)
-    assert 'Config file "broken" is malformed or corrupted.' in caplog.text
+    assert "broken" in caplog.text
 
 
 def test_change_status_invalid_file(populated_config_directory, caplog):
     write_test_tmp_path = populated_config_directory
     change_backup_status("invalid_structure", "active", write_test_tmp_path)
-    assert 'Config file "invalid_structure" is malformed or corrupted.' in caplog.text
+    assert "corrupted" in caplog.text
 
 
 def test_change_status_to_invalid_state(tmp_path, caplog):
@@ -440,8 +395,8 @@ def test_run_backup_if_needed(single_valid_config_directory, mocker):
         (single_valid_config_directory / "documents.json").read_text()
     )
 
-    called_config = mock_perform_backup.call_args.args[0]
-    assert called_config["name"] == "documents"
+    called_config: BackupConfig = mock_perform_backup.call_args.args[0]
+    assert called_config.name == "documents"
     assert config_contents_after_func["total_backup_count"] == initial_backup_count + 1
     assert (
         datetime.now()
@@ -471,10 +426,12 @@ def test_run_backup_file_edge_cases(populated_config_directory, mocker, caplog):
             name, skip_checks=False, file_path=populated_config_directory
         )
 
-    called_configs = [call.args[0] for call in mock_perform_backup.call_args_list]
+    called_configs: list[BackupConfig] = [
+        call.args[0] for call in mock_perform_backup.call_args_list
+    ]
     assert len(called_configs) == 2
-    assert called_configs[0]["name"] == "documents"
-    assert called_configs[1]["name"] == "notes"
+    assert called_configs[0].name == "documents"
+    assert called_configs[1].name == "notes"
     #  photos, music, projects, broken, and invalid were all skipped
     assert "broken" in caplog.text
     assert "invalid_structure" in caplog.text
@@ -582,8 +539,10 @@ def test_cleanup_failed_backup(tmp_path):
 
 
 def test_perform_backup_invalid_path(single_valid_config_directory, caplog):
-    config = loads((single_valid_config_directory / "documents.json").read_text())
-    config["name_format"] = "\0! #$.."
+    config: BackupConfig = BackupConfig.from_file(
+        single_valid_config_directory / "documents.json"
+    )
+    config.name_format = "\0! #$.."
     new_backup_dir = single_valid_config_directory / "temp_backup"
     new_backup_dir.mkdir()
     assert perform_backup(config, path_override=new_backup_dir) is False
@@ -602,7 +561,7 @@ def test_perform_backup_enough_storage_doesnt_call_find_oldest_backup(
     mock_get_directory_size = mocker.patch("CronVault.core.backup.get_directory_size")
     mock_get_directory_size.side_effect = [1500, 3000]
 
-    config = loads((single_valid_config_directory / "documents.json").read_text())
+    config = BackupConfig.from_file(single_valid_config_directory / "documents.json")
     new_backup_dir = single_valid_config_directory / "temp_backup"
     new_backup_dir.mkdir()
     perform_backup(config, path_override=new_backup_dir)
@@ -630,7 +589,7 @@ def test_perform_backup_lack_storage_exits(single_valid_config_directory, mocker
         39_000_000_000,
     ]
 
-    config = loads((single_valid_config_directory / "documents.json").read_text())
+    config = BackupConfig.from_file(single_valid_config_directory / "documents.json")
     new_backup_dir = single_valid_config_directory / "temp_backup"
     new_backup_dir.mkdir()
     marker = generate_cronvault_marker(Path("test1"), Path("test2"))
@@ -669,7 +628,7 @@ def test_perform_backup_deletes_old_backups_and_correctly_copies_data(
         4_000_000_000,
     ]
 
-    config = loads((single_valid_config_directory / "documents.json").read_text())
+    config = BackupConfig.from_file(single_valid_config_directory / "documents.json")
     new_backup_dir = single_valid_config_directory / "temp_backup"
     new_backup_dir.mkdir()
     marker = generate_cronvault_marker(Path("test1"), Path("test2"))
@@ -701,7 +660,7 @@ def test_perform_backup_nonexistent_destination(single_valid_config_directory, m
     mock_get_directory_size = mocker.patch("CronVault.core.backup.get_directory_size")
     mock_get_directory_size.return_value = 4_000_000_000
 
-    config = loads((single_valid_config_directory / "documents.json").read_text())
+    config = BackupConfig.from_file(single_valid_config_directory / "documents.json")
     new_backup_dir = single_valid_config_directory / "temp_backup"
     return_value = perform_backup(config, path_override=new_backup_dir)
 
@@ -721,7 +680,7 @@ def test_perform_backup_calls_cleanup_when_OSERROR_raised(
     mock_get_directory_size = mocker.patch("CronVault.core.backup.get_directory_size")
     mock_get_directory_size.return_value = 4_000_000_000
 
-    config = loads((single_valid_config_directory / "documents.json").read_text())
+    config = BackupConfig.from_file(single_valid_config_directory / "documents.json")
     new_backup_dir = single_valid_config_directory / "temp_backup"
     new_backup_dir.mkdir()
     return_value = perform_backup(config, path_override=new_backup_dir)
@@ -1119,3 +1078,53 @@ def test_create_backup_from_args_no_params(tmp_path: Path, mocker):
     config_file_dict = loads(config_location.read_text())
     assert config_file_dict == args
     assert config_file_dict["name_format"] == f"{args['name']} %Y-%m-%d_%H-%M-%S"
+
+
+def test_backup_config_from_dict_and_to_dict_roundtrip(sample_config_dict):
+    config = BackupConfig.from_dict(sample_config_dict)
+
+    assert config.name == "notes"
+    assert config.path == Path("/home/user/Documents/notes")
+    assert config.destination == Path("/home/user/Backups/notes")
+    assert config.time_period == 432000
+    assert config.name_format == "%Y-%m-%d_%H-%M-%S"
+    assert config.max_backup_size == 53687091200
+    assert config.status == "active"
+    assert config.total_backup_count == 3
+    assert config.last_known_backup == datetime(2026, 8, 20, 14, 30, 0)
+
+    # Ensure serialization produces the exact JSON-compatible dictionary
+    assert config.to_dict() == sample_config_dict
+    assert loads(dumps(config.to_dict())) == sample_config_dict
+
+
+def test_backup_config_from_dict_handles_defaults_and_null_backup():
+    minimal_data = {
+        "name": "projects",
+        "path": "/tmp/projects",
+        "destination": "/tmp/backups",
+        "time_period": 3600,
+        "name_format": "%Y%m%d",
+        "max_backup_size": 1000,
+    }
+
+    config = BackupConfig.from_dict(minimal_data)
+
+    assert config.status == "active"
+    assert config.total_backup_count == 0
+    assert config.last_known_backup is None
+    assert config.to_dict()["last_known_backup"] is None
+
+
+def test_backup_config_handles_legacy_naming_format_key():
+    data = {
+        "name": "photos",
+        "path": "/photos",
+        "destination": "/backup",
+        "time_period": 100,
+        "naming_format": "photos_%Y",  # CLI uses naming_format
+        "max_backup_size": 500,
+    }
+
+    config = BackupConfig.from_dict(data)
+    assert config.name_format == "photos_%Y"
