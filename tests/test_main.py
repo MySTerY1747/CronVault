@@ -5,6 +5,7 @@ from json import dumps, loads
 import subprocess
 import sys
 from unittest.mock import MagicMock
+
 from CronVault.cli.parse_functions import (
     parse_name,
     parse_name_format,
@@ -28,8 +29,6 @@ from CronVault.core.config import (
     interactive_config_creator,
     is_name_duplicate,
     fill_missing_create_args,
-    write_file,
-    convert_user_args_json,
 )
 from CronVault.core.backup import (
     run_backup_if_needed,
@@ -236,26 +235,6 @@ def test_default_backup_name_not_unique_new(
     assert get_default_backup_name(source_directory, tmp_path) == expected_output
 
 
-def test_convert_args_json():
-    input_dict = {
-        "name": "Test1",
-        "max_backup_size": 512000,
-        "path": "~/Downloads/Test",
-        "name_format": "Test1 %Y-%m-%M",
-        "destination": "~/Documents/Test",
-        "time_period": 2_592_000,
-    }
-
-    output_dict = input_dict.copy()
-    output_dict["last_known_backup"] = None
-    output_dict["total_backup_count"] = 0
-    output_dict["status"] = "active"
-
-    expected_output = dumps(output_dict)
-
-    assert convert_user_args_json(**input_dict) == expected_output
-
-
 def test_config_path(tmp_path):
     result = get_config_path("myconfig", tmp_path)
 
@@ -277,15 +256,6 @@ def test_config_path_dir_missing(tmp_path):
 
     assert new_dir.exists()
     assert result == new_dir / "test.json"
-
-
-def test_write_file_writes_contents(tmp_path):
-    file_path = tmp_path / "output.json"
-
-    write_file(file_path, '{"a": 1}')
-
-    assert file_path.exists()
-    assert file_path.read_text() == '{"a": 1}'
 
 
 def test_filter_active(generate_test_configs):
@@ -449,8 +419,8 @@ def test_run_backup_if_needed(single_valid_config_directory, mocker):
         (single_valid_config_directory / "documents.json").read_text()
     )
 
-    called_config = mock_perform_backup.call_args.args[0]
-    assert called_config["name"] == "documents"
+    called_config: BackupConfig = mock_perform_backup.call_args.args[0]
+    assert called_config.name == "documents"
     assert config_contents_after_func["total_backup_count"] == initial_backup_count + 1
     assert (
         datetime.now()
@@ -480,10 +450,12 @@ def test_run_backup_file_edge_cases(populated_config_directory, mocker, caplog):
             name, skip_checks=False, file_path=populated_config_directory
         )
 
-    called_configs = [call.args[0] for call in mock_perform_backup.call_args_list]
+    called_configs: list[BackupConfig] = [
+        call.args[0] for call in mock_perform_backup.call_args_list
+    ]
     assert len(called_configs) == 2
-    assert called_configs[0]["name"] == "documents"
-    assert called_configs[1]["name"] == "notes"
+    assert called_configs[0].name == "documents"
+    assert called_configs[1].name == "notes"
     #  photos, music, projects, broken, and invalid were all skipped
     assert "broken" in caplog.text
     assert "invalid_structure" in caplog.text
@@ -591,8 +563,10 @@ def test_cleanup_failed_backup(tmp_path):
 
 
 def test_perform_backup_invalid_path(single_valid_config_directory, caplog):
-    config = loads((single_valid_config_directory / "documents.json").read_text())
-    config["name_format"] = "\0! #$.."
+    config: BackupConfig = BackupConfig.from_file(
+        single_valid_config_directory / "documents.json"
+    )
+    config.name_format = "\0! #$.."
     new_backup_dir = single_valid_config_directory / "temp_backup"
     new_backup_dir.mkdir()
     assert perform_backup(config, path_override=new_backup_dir) is False
@@ -611,7 +585,7 @@ def test_perform_backup_enough_storage_doesnt_call_find_oldest_backup(
     mock_get_directory_size = mocker.patch("CronVault.core.backup.get_directory_size")
     mock_get_directory_size.side_effect = [1500, 3000]
 
-    config = loads((single_valid_config_directory / "documents.json").read_text())
+    config = BackupConfig.from_file(single_valid_config_directory / "documents.json")
     new_backup_dir = single_valid_config_directory / "temp_backup"
     new_backup_dir.mkdir()
     perform_backup(config, path_override=new_backup_dir)
@@ -639,7 +613,7 @@ def test_perform_backup_lack_storage_exits(single_valid_config_directory, mocker
         39_000_000_000,
     ]
 
-    config = loads((single_valid_config_directory / "documents.json").read_text())
+    config = BackupConfig.from_file(single_valid_config_directory / "documents.json")
     new_backup_dir = single_valid_config_directory / "temp_backup"
     new_backup_dir.mkdir()
     marker = generate_cronvault_marker(Path("test1"), Path("test2"))
@@ -678,7 +652,7 @@ def test_perform_backup_deletes_old_backups_and_correctly_copies_data(
         4_000_000_000,
     ]
 
-    config = loads((single_valid_config_directory / "documents.json").read_text())
+    config = BackupConfig.from_file(single_valid_config_directory / "documents.json")
     new_backup_dir = single_valid_config_directory / "temp_backup"
     new_backup_dir.mkdir()
     marker = generate_cronvault_marker(Path("test1"), Path("test2"))
@@ -710,7 +684,7 @@ def test_perform_backup_nonexistent_destination(single_valid_config_directory, m
     mock_get_directory_size = mocker.patch("CronVault.core.backup.get_directory_size")
     mock_get_directory_size.return_value = 4_000_000_000
 
-    config = loads((single_valid_config_directory / "documents.json").read_text())
+    config = BackupConfig.from_file(single_valid_config_directory / "documents.json")
     new_backup_dir = single_valid_config_directory / "temp_backup"
     return_value = perform_backup(config, path_override=new_backup_dir)
 
@@ -730,7 +704,7 @@ def test_perform_backup_calls_cleanup_when_OSERROR_raised(
     mock_get_directory_size = mocker.patch("CronVault.core.backup.get_directory_size")
     mock_get_directory_size.return_value = 4_000_000_000
 
-    config = loads((single_valid_config_directory / "documents.json").read_text())
+    config = BackupConfig.from_file(single_valid_config_directory / "documents.json")
     new_backup_dir = single_valid_config_directory / "temp_backup"
     new_backup_dir.mkdir()
     return_value = perform_backup(config, path_override=new_backup_dir)

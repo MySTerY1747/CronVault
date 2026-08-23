@@ -138,46 +138,6 @@ def get_default_backup_name(
     return ""
 
 
-def convert_user_args_json(
-    name: str,
-    max_backup_size: int,
-    path: str,
-    name_format: str,
-    destination: str,
-    time_period: int,
-) -> str:
-    """Convert user backup args to JSON, to then be passed to a write function
-
-    Args:
-        name: name for the unique backup
-        max_backup_size: maximum backup size
-        path: path to back up
-        name_format: naming scheme to follow
-        destination: path in whic backups are stored
-        time_period: time period in seconds
-
-    Output:
-        (str) JSON-formatted object representing user args, ready to be written
-    """
-    #  all args have gone through the parsers first
-    #  so no type checking required
-    args_json = json.dumps(
-        {
-            "name": name,
-            "max_backup_size": max_backup_size,
-            "path": path,
-            "name_format": name_format,
-            "destination": destination,
-            "time_period": time_period,
-            "last_known_backup": None,
-            "total_backup_count": 0,
-            "status": "active",
-        }
-    )
-    logging.info("Converted user args to JSON")
-    return args_json
-
-
 def get_config_path(
     name: str, base_path: Path = Path(CONFIG_LOCATION).expanduser()
 ) -> Path:
@@ -200,17 +160,6 @@ def get_config_path(
         raise ValueError(f"File {file_path} already exists.")
 
     return file_path
-
-
-def write_file(file_path: Path, contents: str) -> None:
-    try:
-        with open(file_path, "w") as f:
-            f.write(contents)
-    except OSError as e:
-        logging.exception(f"Error writing file {file_path}: {e}")
-        raise OSError(f"Error writing file {file_path}: {e}")
-
-    logging.info(f"File {file_path} successfully written")
 
 
 def get_all_backups(file_path: Path = Path(CONFIG_LOCATION)) -> list[dict[str, Any]]:
@@ -400,16 +349,10 @@ def create_backup_from_args(
             args_dict["naming_format"] = NAME_DEFAULT
             fill_missing_create_args(args_dict, config_path)
 
-    file_path = get_config_path(args_dict["name"], config_path)
-    contents = convert_user_args_json(
-        args_dict["name"],
-        args_dict["max_backup_size"],
-        args_dict["path"],
-        args_dict["naming_format"],
-        args_dict["destination"],
-        args_dict["time_period"],
-    )
-    write_file(file_path, contents)
+    config = BackupConfig.from_dict(args_dict)
+    if (config_path / f"{args_dict['name']}.json").exists():
+        logging.error("Config already exists, exiting...")
+    config.write_to_config_file(config_path)
     logging.info("Successfully wrote backup configuration file")
 
 
