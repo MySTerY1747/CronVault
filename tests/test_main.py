@@ -13,6 +13,7 @@ from CronVault.cli.parse_functions import (
     parse_time_period,
 )
 from CronVault.core.config import (
+    BackupConfig,
     get_default_backup_name,
     get_all_backups,
     get_backup_frequency_from_config,
@@ -1127,3 +1128,53 @@ def test_create_backup_from_args_no_params(tmp_path: Path, mocker):
     config_file_dict = loads(config_location.read_text())
     assert config_file_dict == args
     assert config_file_dict["name_format"] == f"{args['name']} %Y-%m-%d_%H-%M-%S"
+
+
+def test_backup_config_from_dict_and_to_dict_roundtrip(sample_config_dict):
+    config = BackupConfig.from_dict(sample_config_dict)
+
+    assert config.name == "notes"
+    assert config.path == Path("/home/user/Documents/notes")
+    assert config.destination == Path("/home/user/Backups/notes")
+    assert config.time_period == 432000
+    assert config.name_format == "%Y-%m-%d_%H-%M-%S"
+    assert config.max_backup_size == 53687091200
+    assert config.status == "active"
+    assert config.total_backup_count == 3
+    assert config.last_known_backup == datetime(2026, 8, 20, 14, 30, 0)
+
+    # Ensure serialization produces the exact JSON-compatible dictionary
+    assert config.to_dict() == sample_config_dict
+    assert loads(dumps(config.to_dict())) == sample_config_dict
+
+
+def test_backup_config_from_dict_handles_defaults_and_null_backup():
+    minimal_data = {
+        "name": "projects",
+        "path": "/tmp/projects",
+        "destination": "/tmp/backups",
+        "time_period": 3600,
+        "name_format": "%Y%m%d",
+        "max_backup_size": 1000,
+    }
+
+    config = BackupConfig.from_dict(minimal_data)
+
+    assert config.status == "active"
+    assert config.total_backup_count == 0
+    assert config.last_known_backup is None
+    assert config.to_dict()["last_known_backup"] is None
+
+
+def test_backup_config_handles_legacy_naming_format_key():
+    data = {
+        "name": "photos",
+        "path": "/photos",
+        "destination": "/backup",
+        "time_period": 100,
+        "naming_format": "photos_%Y",  # CLI uses naming_format
+        "max_backup_size": 500,
+    }
+
+    config = BackupConfig.from_dict(data)
+    assert config.name_format == "photos_%Y"

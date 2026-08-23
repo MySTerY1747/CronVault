@@ -1,6 +1,8 @@
 #  config.py
 #  Functions for config creation, loading, writing, and duplicate checking
 
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
 import logging
 import send2trash
@@ -18,6 +20,95 @@ from CronVault.core.config_json_schema import SCHEMA
 from typing import Any
 from colorama import Fore, Style
 from jsonschema import validate, FormatChecker, ValidationError
+
+
+@dataclass
+class BackupConfig:
+    name: str
+    path: Path
+    destination: Path
+    time_period: int
+    name_format: str
+    max_backup_size: int
+    status: str = "active"
+    total_backup_count: int = 0
+    last_known_backup: datetime | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "BackupConfig":
+        return cls(
+            name=data["name"],
+            path=Path(data["path"]),
+            destination=Path(data["destination"]),
+            time_period=data["time_period"],
+            name_format=data.get("name_format") or data["naming_format"],
+            max_backup_size=data["max_backup_size"],
+            status=data.get("status", "active"),
+            total_backup_count=data.get("total_backup_count", 0),
+            last_known_backup=(
+                datetime.fromisoformat(data["last_known_backup"])
+                if data.get("last_known_backup")
+                else None
+            ),
+        )
+
+    @classmethod
+    def from_file(cls, file_path: Path) -> "BackupConfig":
+        config_file = json.loads(file_path.read_text())
+        validate(instance=config_file, schema=SCHEMA, format_checker=FormatChecker())
+        return cls.from_dict(config_file)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "path": str(self.path),
+            "destination": str(self.destination),
+            "time_period": self.time_period,
+            "name_format": self.name_format,
+            "max_backup_size": self.max_backup_size,
+            "status": self.status,
+            "total_backup_count": self.total_backup_count,
+            "last_known_backup": (
+                self.last_known_backup.isoformat() if self.last_known_backup else None
+            ),
+        }
+
+    def write_to_config_file(
+        self, file_path: Path = Path(CONFIG_LOCATION).expanduser()
+    ) -> None:
+        try:
+            file_path = file_path / f"{self.name}.json"
+            file_path.write_text(json.dumps(self.to_dict()))
+        except OSError:
+            logging.error(
+                f"Encountered error while trying to write config to {file_path}"
+            )
+            raise
+
+    def is_due(self) -> bool:
+        if self.last_known_backup is None:
+            return True
+
+        return datetime.now() - self.last_known_backup >= timedelta(
+            seconds=self.time_period
+        )
+
+    def record_successful_backup(
+        self, file_path: Path = Path(CONFIG_LOCATION).expanduser()
+    ) -> None:
+        self.last_known_backup = datetime.now()
+        self.total_backup_count += 1
+        self.write_to_config_file(file_path)
+
+    def activate(self) -> None:
+        self.status = "active"
+
+    def deactivate(self) -> None:
+        self.status = "inactive"
+
+    def is_active(self) -> bool:
+        return self.status == "active"
+        #  currently treating *all* other values as inactive
 
 
 def get_default_backup_name(

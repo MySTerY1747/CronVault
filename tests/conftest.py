@@ -92,3 +92,18 @@ def single_valid_config_directory(generate_test_configs, tmp_path) -> Path:
     configs = generate_test_configs
     (tmp_path / f"{configs[0]['name']}.json").write_text(dumps(configs[0]))
     return tmp_path
+
+
+@pytest.fixture
+def sample_config_dict():
+    return {
+        "name": "notes",
+        "path": "/home/user/Documents/notes",
+        "destination": "/home/user/Backups/notes",
+        "time_period": 432000,
+        "name_format": "%Y-%m-%d_%H-%M-%S",
+        "max_backup_size": 53687091200,
+        "status": "active",
+        "total_backup_count": 3,
+        "last_known_backup": "2026-08-20T14:30:00",
+    }

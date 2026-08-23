@@ -8,14 +8,13 @@ import shutil
 import pathvalidate
 from datetime import datetime
 from pathlib import Path
+from CronVault.core.config import BackupConfig
 from CronVault.core.constants import (
     CONFIG_LOCATION,
     CRONVAULT_MARKER_FILENAME,
     MAX_DELETE_OLD_BACKUP_ATTEMPTS,
 )
-from CronVault.core.config_json_schema import SCHEMA
-from jsonschema import validate, FormatChecker, ValidationError
-from typing import Any
+from jsonschema import ValidationError
 
 
 def get_directory_size(path: Path) -> int:
@@ -30,23 +29,13 @@ def run_backup_if_needed(
     file_path: Path = Path(CONFIG_LOCATION).expanduser(),
 ) -> None:
     logging.info(f'Attempting to backup "{name}"')
-    file_path = file_path / f"{name}.json"
+    config_file_path = file_path / f"{name}.json"
     try:
         if file_path.exists():
-            config = json.loads(file_path.read_text())
-            validate(instance=config, schema=SCHEMA, format_checker=FormatChecker())
+            config = BackupConfig.from_file(config_file_path)
 
-            previous_backup = config["last_known_backup"]
-            if previous_backup is None:
-                previous_backup = datetime.fromisoformat("1970-01-01")
-            else:
-                previous_backup = datetime.fromisoformat(previous_backup)
-
-            time_period_elapsed = (
-                datetime.now() - previous_backup
-            ).total_seconds() >= config["time_period"]
-
-            is_active: bool = config["status"] == "active"
+            time_period_elapsed = config.is_due()
+            is_active = config.is_active()
 
             was_performed = False
             if skip_checks or (time_period_elapsed and is_active):
@@ -56,11 +45,8 @@ def run_backup_if_needed(
             elif (not skip_checks) and (not is_active):
                 logging.info("Skipping backup: not currently active")
 
-            # TODO: Separate out this if statement into a `record_backup` function
             if was_performed:
-                config["last_known_backup"] = datetime.now().isoformat()
-                config["total_backup_count"] += 1
-                file_path.write_text(json.dumps(config))
+                config.record_successful_backup(file_path)
 
                 logging.info(
                     f"Successfully backed up {name}, and wrote changes to config"
@@ -152,20 +138,15 @@ def cleanup_failed_backup(backup_folder_path: Path) -> bool:
     return False
 
 
-def perform_backup(config: dict[str, Any], path_override: Path | None = None) -> bool:
-    """config must be valid and already checked"""
+def perform_backup(config: BackupConfig, path_override: Path | None = None) -> bool:
     #  in the future, add notification support
     #  and option to zip by default
-    logging.info(f"Performing backup for config {config['name']}")
-    folder_path = Path(config["path"])
-    backup_folder_path = (
-        Path(path_override) if path_override else Path(config["destination"])
-    )
-    max_storage_limit = config["max_backup_size"]
+    logging.info(f"Performing backup for config {config.name}")
+    backup_folder_path = Path(path_override) if path_override else config.destination
     destination: Path | None = None
 
     try:
-        backup_name = datetime.strftime(datetime.now(), config["name_format"])
+        backup_name = datetime.strftime(datetime.now(), config.name_format)
         destination = backup_folder_path / backup_name
 
         if not pathvalidate.is_valid_filepath(destination, platform="auto"):
@@ -174,13 +155,13 @@ def perform_backup(config: dict[str, Any], path_override: Path | None = None) ->
             )
             return False
 
-        folder_path_size = get_directory_size(folder_path)
+        folder_path_size = get_directory_size(config.path)
         free_device_space = get_device_free_space(backup_folder_path)
         for _ in range(MAX_DELETE_OLD_BACKUP_ATTEMPTS):
             exceeds_storage_limit: bool = (
                 folder_path_size + get_directory_size(backup_folder_path)
                 #  backup folder size should be checked on every iteration, as we are sending to trash
-            ) > max_storage_limit or (folder_path_size > free_device_space)
+            ) > config.max_backup_size or (folder_path_size > free_device_space)
             if not exceeds_storage_limit:
                 logging.info("Enough space to perform backup. Proceeding.")
                 break
@@ -188,7 +169,7 @@ def perform_backup(config: dict[str, Any], path_override: Path | None = None) ->
             oldest_backup = find_oldest_backup(backup_folder_path)
             if oldest_backup is None:
                 logging.error(
-                    f"Not enough space in {backup_folder_path} to back up {folder_path}. Exiting"
+                    f"Not enough space in {backup_folder_path} to back up {config.path}. Exiting"
                 )
                 return False
 
@@ -213,12 +194,12 @@ def perform_backup(config: dict[str, Any], path_override: Path | None = None) ->
         destination.mkdir()
 
         #  `copy_into` was introduced in Python 3.14. This line should work, but pyright isn't picking it up for some reason...
-        logging.info(f"Copying contents of {folder_path} to {destination}...")
-        folder_path.copy_into(destination, preserve_metadata=True)  # pyright: ignore
+        logging.info(f"Copying contents of {config.path} to {destination}...")
+        config.path.copy_into(destination, preserve_metadata=True)  # pyright: ignore
         logging.info("Copying complete")
         cronvault_marker = destination / CRONVAULT_MARKER_FILENAME
         cronvault_marker.write_text(
-            generate_cronvault_marker(folder_path, backup_folder_path)
+            generate_cronvault_marker(config.path, backup_folder_path)
         )
         logging.info(f"Wrote CronVault marker to {cronvault_marker}")
         return True
