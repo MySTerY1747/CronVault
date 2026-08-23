@@ -174,7 +174,7 @@ def get_all_backups(
     for config in filenames:
         try:
             logging.info(f"Opening file {config}")
-            configs.append(BackupConfig.from_file(file_path / config))
+            configs.append(BackupConfig.from_file(config))
         except (json.JSONDecodeError, ValidationError, OSError):
             logging.error(
                 f"Error with config file {config} when trying to read JSON. Skipping file. For more detail use --verbose"
@@ -248,7 +248,7 @@ def change_backup_status(
 def delete_backup(
     name: str, file_path: Path = Path(CONFIG_LOCATION).expanduser()
 ) -> None:
-    #  This funciton is so simple, that using BackupConfig would add unneeded complexity
+    #  This function is so simple, that using BackupConfig would add unneeded complexity
     logging.info(f'Attempting to delete backup "{name}"')
     file_path = file_path / f"{name}.json"
     try:
@@ -339,6 +339,7 @@ def create_backup_from_args(
     config = BackupConfig.from_dict(args_dict)
     if (config_path / f"{args_dict['name']}.json").exists():
         logging.error("Config already exists, exiting...")
+        return
     config.write_to_config_file(config_path)
     logging.info("Successfully wrote backup configuration file")
 

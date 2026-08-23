@@ -31,7 +31,7 @@ def run_backup_if_needed(
     logging.info(f'Attempting to backup "{name}"')
     config_file_path = file_path / f"{name}.json"
     try:
-        if file_path.exists():
+        if config_file_path.exists():
             config = BackupConfig.from_file(config_file_path)
 
             time_period_elapsed = config.is_due()
