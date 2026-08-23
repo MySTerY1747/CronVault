@@ -160,7 +160,7 @@ if __name__ == "__main__":
         if args.all:
             configs = filter_configs_active(get_all_backups())
             for config in configs:
-                run_backup_if_needed(config["name"], skip_checks=args.force)
+                run_backup_if_needed(config.name, skip_checks=args.force)
         else:
             for name in args.names:
                 run_backup_if_needed(name, skip_checks=args.force)

@@ -36,27 +36,56 @@ class BackupConfig:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "BackupConfig":
-        return cls(
-            name=data["name"],
-            path=Path(data["path"]),
-            destination=Path(data["destination"]),
-            time_period=data["time_period"],
-            name_format=data.get("name_format") or data["naming_format"],
-            max_backup_size=data["max_backup_size"],
-            status=data.get("status", "active"),
-            total_backup_count=data.get("total_backup_count", 0),
-            last_known_backup=(
-                datetime.fromisoformat(data["last_known_backup"])
-                if data.get("last_known_backup")
-                else None
-            ),
-        )
+        try:
+            return cls(
+                name=data["name"],
+                path=Path(data["path"]),
+                destination=Path(data["destination"]),
+                time_period=data["time_period"],
+                name_format=data.get("name_format") or data["naming_format"],
+                max_backup_size=data["max_backup_size"],
+                status=data.get("status", "active"),
+                total_backup_count=data.get("total_backup_count", 0),
+                last_known_backup=(
+                    datetime.fromisoformat(data["last_known_backup"])
+                    if data.get("last_known_backup")
+                    else None
+                ),
+            )
+        except KeyError:
+            logging.error(
+                f"Could not convert dictionary {data} to BackupConfig. Missing one or more properties:"
+            )
+            raise
 
     @classmethod
     def from_file(cls, file_path: Path) -> "BackupConfig":
-        config_file = json.loads(file_path.read_text())
-        validate(instance=config_file, schema=SCHEMA, format_checker=FormatChecker())
-        return cls.from_dict(config_file)
+        try:
+            if not file_path.exists():
+                logging.error(f"Config filepath not found: {file_path}")
+                raise FileNotFoundError(f"Config filepath not found: {file_path}")
+            config_file = json.loads(file_path.read_text())
+            validate(
+                instance=config_file, schema=SCHEMA, format_checker=FormatChecker()
+            )
+            return cls.from_dict(config_file)
+        except (json.JSONDecodeError, ValidationError):
+            logging.error(
+                f'Config file in "{file_path}" is malformed or corrupted. View details with --verbose'
+            )
+            raise
+        except IOError:
+            logging.error(
+                f"Encountered IOError while trying to read config file {file_path}"
+            )
+            raise
+
+    @classmethod
+    def from_name(
+        cls, name: str, file_path: Path = Path(CONFIG_LOCATION).expanduser()
+    ) -> "BackupConfig":
+        config_filepath = file_path / f"{name}.json"
+        return cls.from_file(config_filepath)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -84,6 +113,7 @@ class BackupConfig:
                 f"Encountered error while trying to write config to {file_path}"
             )
             raise
+        logging.info(f"Successfully wrote config {self.name} to {file_path}")
 
     def is_due(self) -> bool:
         if self.last_known_backup is None:
@@ -99,12 +129,6 @@ class BackupConfig:
         self.last_known_backup = datetime.now()
         self.total_backup_count += 1
         self.write_to_config_file(file_path)
-
-    def activate(self) -> None:
-        self.status = "active"
-
-    def deactivate(self) -> None:
-        self.status = "inactive"
 
     def is_active(self) -> bool:
         return self.status == "active"
@@ -138,84 +162,51 @@ def get_default_backup_name(
     return ""
 
 
-def get_config_path(
-    name: str, base_path: Path = Path(CONFIG_LOCATION).expanduser()
-) -> Path:
-    """Takes an optional base config path (default is `~/.config/CronVault/`), ensures it exists, and that the file `{base_path}/{name}.json` is not already present
+def get_all_backups(
+    file_path: Path = Path(CONFIG_LOCATION).expanduser(),
+) -> list[BackupConfig]:
+    configs: list[BackupConfig] = []
 
-    Args:
-        name: `str` the name of the file that will be stored
-        base_path: `Path` the initial path to which the name is added. Default is `~/.config/CronVault/`
+    filenames = file_path.glob("*.json")
 
-    Returns:
-        `Path` the path to write the data (if successful). Otherwise raises an error
-    """
-    base_path = base_path.expanduser()
-    if not (base_path.is_dir()):
-        base_path.mkdir()
-
-    file_path: Path = base_path / f"{name}.json"
-    if file_path.exists():
-        logging.error(f"File {file_path} already exists.")
-        raise ValueError(f"File {file_path} already exists.")
-
-    return file_path
-
-
-def get_all_backups(file_path: Path = Path(CONFIG_LOCATION)) -> list[dict[str, Any]]:
-    configs: list[dict[str, Any]] = []
-
-    try:
-        filenames = file_path.expanduser().glob("*.json")
-
-        #  look into paralelizing for loop in the future
-        logging.info("Iterating through list of config files")
-        for config in filenames:
+    #  look into paralelizing for loop in the future
+    logging.info("Iterating through list of config files")
+    for config in filenames:
+        try:
             logging.info(f"Opening file {config}")
-            with open(config) as f:
-                try:
-                    contents = json.load(f)
-                    validate(
-                        instance=contents, schema=SCHEMA, format_checker=FormatChecker()
-                    )
-                    configs.append(contents)
-                except (json.JSONDecodeError, ValidationError) as e:
-                    logging.error(
-                        f"Error with config file {config} when trying to read JSON. Skipping file. For more detail use --verbose"
-                    )
-                    logging.info(f"{e}")
-                    continue
-
-    except OSError as e:
-        logging.exception(f"Error when trying to read file: {e}")
-        raise
+            configs.append(BackupConfig.from_file(file_path / config))
+        except (json.JSONDecodeError, ValidationError, OSError):
+            logging.error(
+                f"Error with config file {config} when trying to read JSON. Skipping file. For more detail use --verbose"
+            )
+            continue
 
     return configs
 
 
-def filter_configs_active(configs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def filter_configs_active(configs: list[BackupConfig]) -> list[BackupConfig]:
     logging.info("Filtering through configs to get active ones")
-    filtered_list: list[dict[str, Any]] = []
+    filtered_list: list[BackupConfig] = []
 
     for config in configs:
-        if config.get("status", None) == "active":
+        if config.status == "active":
             filtered_list.append(config)
 
     return filtered_list
 
 
-def filter_configs_inactive(configs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def filter_configs_inactive(configs: list[BackupConfig]) -> list[BackupConfig]:
     logging.info("Filtering through configs to get inactive ones")
-    filtered_list: list[dict[str, Any]] = []
+    filtered_list: list[BackupConfig] = []
 
     for config in configs:
-        if config.get("status", None) == "inactive":
+        if config.status == "inactive":
             filtered_list.append(config)
 
     return filtered_list
 
 
-def print_configs(configs: list[dict[str, Any]]) -> None:
+def print_configs(configs: list[BackupConfig]) -> None:
     """Prints all active configs with proper highlighting and color support"""
     logging.info("Printing configs")
 
@@ -224,11 +215,11 @@ def print_configs(configs: list[dict[str, Any]]) -> None:
 
     if len(configs) == 0:
         return
-    max_width = max(len(config["name"]) for config in configs)
+    max_width = max(len(config.name) for config in configs)
     for config in configs:
-        is_active: bool = config["status"] == "active"
-        print(f"• {config['name']:<{max_width}}: ", end="")
-        print((Fore.GREEN if is_active else Fore.RED) + f"{config['status']}")
+        is_active: bool = config.status == "active"
+        print(f"• {config.name:<{max_width}}: ", end="")
+        print((Fore.GREEN if is_active else Fore.RED) + f"{config.status}")
 
 
 def change_backup_status(
@@ -239,29 +230,25 @@ def change_backup_status(
         return
     logging.info(f"Changing activity status of config {name} to {status}")
 
-    file_path = file_path / f"{name}.json"
     try:
-        if file_path.exists():
-            config = json.loads(file_path.read_text())
-            validate(instance=config, schema=SCHEMA, format_checker=FormatChecker())
-            config["status"] = status
-            file_path.write_text(json.dumps(config))
-            logging.info("Successfully changed file contents")
-        else:
-            logging.error(f"No such config found: {name}. Exiting")
-    except (json.JSONDecodeError, ValidationError) as e:
-        logging.error(
-            f'Config file "{name}" is malformed or corrupted. View details with --verbose'
-        )
-        logging.debug(e)
-    except IOError:
-        logging.error(f"Encountered IOError while trying to edit config file {name}")
-        raise
+        config = BackupConfig.from_name(name, file_path)
+        config.status = status
+        config.write_to_config_file(file_path)
+        logging.info("Successfully changed file contents")
+    except FileNotFoundError:
+        #  If the file is missing, just log it and return. Don't crash
+        logging.error(f"File not found in {file_path}. Skipping")
+        return
+    except (json.JSONDecodeError, ValidationError):
+        #  If the file is malformed, just log it and return. Don't crash
+        logging.error(f"File in {file_path} is broken or corrupted. Skipping")
+        return
 
 
 def delete_backup(
     name: str, file_path: Path = Path(CONFIG_LOCATION).expanduser()
 ) -> None:
+    #  This funciton is so simple, that using BackupConfig would add unneeded complexity
     logging.info(f'Attempting to delete backup "{name}"')
     file_path = file_path / f"{name}.json"
     try:

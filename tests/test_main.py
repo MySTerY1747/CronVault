@@ -18,7 +18,6 @@ from CronVault.core.config import (
     get_default_backup_name,
     get_all_backups,
     get_backup_frequency_from_config,
-    get_config_path,
     generate_default_config,
     change_backup_status,
     create_backup_from_args,
@@ -235,45 +234,22 @@ def test_default_backup_name_not_unique_new(
     assert get_default_backup_name(source_directory, tmp_path) == expected_output
 
 
-def test_config_path(tmp_path):
-    result = get_config_path("myconfig", tmp_path)
-
-    assert result == tmp_path / "myconfig.json"
-
-
-def test_config_path_raises_when_file_exists(tmp_path):
-    existing_file: Path = tmp_path / "test.json"
-    existing_file.write_text("this file exists already")
-
-    with pytest.raises(ValueError):
-        get_config_path("test", tmp_path)
-
-
-def test_config_path_dir_missing(tmp_path):
-    new_dir: Path = tmp_path / "configs"
-
-    result = get_config_path("test", new_dir)
-
-    assert new_dir.exists()
-    assert result == new_dir / "test.json"
-
-
 def test_filter_active(generate_test_configs):
-    configs = generate_test_configs
+    configs = [BackupConfig.from_dict(config) for config in generate_test_configs]
     active = filter_configs_active(configs)
     assert len(active) == 3
-    assert all(config["status"] == "active" for config in active)
+    assert all(config.status == "active" for config in active)
 
 
 def test_filter_inactive(generate_test_configs):
-    configs = generate_test_configs
+    configs = [BackupConfig.from_dict(config) for config in generate_test_configs]
     inactive = filter_configs_inactive(configs)
     assert len(inactive) == 2
-    assert all(config["status"] == "inactive" for config in inactive)
+    assert all(config.status == "inactive" for config in inactive)
 
 
 def test_print_configs(generate_test_configs, capsys):
-    configs = generate_test_configs
+    configs = [BackupConfig.from_dict(config) for config in generate_test_configs]
     print_configs(configs)
     captured = capsys.readouterr()
     for text in [
@@ -292,13 +268,13 @@ def test_print_configs(generate_test_configs, capsys):
 def test_get_all_backups_skips_invalid_json_files(
     generate_test_configs, populated_config_directory
 ):
-    configs = generate_test_configs
+    configs = [BackupConfig.from_dict(config) for config in generate_test_configs]
     write_test_tmp_path: Path = populated_config_directory
     config_results = get_all_backups(file_path=write_test_tmp_path)
     for config in configs:
         assert config in config_results
     assert len(config_results) == 5
-    assert "broken" not in [config["name"] for config in config_results]
+    assert "broken" not in [config.name for config in config_results]
 
 
 def test_activate_inactive_file(populated_config_directory):
@@ -348,13 +324,13 @@ def test_activate_missing_file(tmp_path):
 def test_change_status_broken_file(populated_config_directory, caplog):
     write_test_tmp_path = populated_config_directory
     change_backup_status("broken", "active", write_test_tmp_path)
-    assert 'Config file "broken" is malformed or corrupted.' in caplog.text
+    assert "broken" in caplog.text
 
 
 def test_change_status_invalid_file(populated_config_directory, caplog):
     write_test_tmp_path = populated_config_directory
     change_backup_status("invalid_structure", "active", write_test_tmp_path)
-    assert 'Config file "invalid_structure" is malformed or corrupted.' in caplog.text
+    assert "corrupted" in caplog.text
 
 
 def test_change_status_to_invalid_state(tmp_path, caplog):

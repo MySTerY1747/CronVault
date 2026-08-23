@@ -5,6 +5,8 @@ from json import dumps
 from datetime import datetime
 from pathlib import Path
 
+from CronVault.core.config import BackupConfig
+
 
 @pytest.fixture
 def generate_test_configs() -> list[dict[str, object]]:
@@ -75,9 +77,11 @@ def populated_config_directory(generate_test_configs, tmp_path) -> Path:
     - 1 invalid JSON file
     - 1 valid JSON file with incorrect structure
     """
-    configs = generate_test_configs
+    configs: list[BackupConfig] = [
+        BackupConfig.from_dict(config) for config in generate_test_configs
+    ]
     for config in configs:
-        (tmp_path / f"{config['name']}.json").write_text(dumps(config))
+        (tmp_path / f"{config.name}.json").write_text(dumps(config.to_dict()))
     (tmp_path / "broken.json").write_text("This is an invalid JSON file")
     invalid_structure = {"name": "photos"}
     (tmp_path / "invalid_structure.json").write_text(dumps(invalid_structure))
