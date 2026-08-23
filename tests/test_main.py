@@ -2,7 +2,6 @@
 #  unit tests for main function of the program
 
 from json import dumps, loads
-import os
 import subprocess
 import sys
 from unittest.mock import MagicMock
