@@ -14,6 +14,7 @@ from CronVault.core.constants import (
     CRONVAULT_MARKER_FILENAME,
     MAX_DELETE_OLD_BACKUP_ATTEMPTS,
 )
+from CronVault.core.backup_engines import ENGINE_REGISTRY, copy_engine
 from jsonschema import ValidationError
 
 
@@ -195,18 +196,11 @@ def perform_backup(config: BackupConfig, path_override: Path | None = None) -> b
             logging.error(f"Destination path {destination} already exists. Aborting...")
             return False
 
-        destination.mkdir()
-
-        #  `copy_into` was introduced in Python 3.14. This line should work, but pyright isn't picking it up for some reason...
-        logging.info(f"Copying contents of {config.path} to {destination}...")
-        config.path.copy_into(destination, preserve_metadata=True)  # pyright: ignore
-        logging.info("Copying complete")
-        cronvault_marker = destination / CRONVAULT_MARKER_FILENAME
-        cronvault_marker.write_text(
-            generate_cronvault_marker(config.path, backup_folder_path)
-        )
-        logging.info(f"Wrote CronVault marker to {cronvault_marker}")
+        marker_content = generate_cronvault_marker(config.path, backup_folder_path)
+        current_engine = ENGINE_REGISTRY.get(config.engine, copy_engine)
+        current_engine(config.path, destination, marker_content)
         return True
+
     except PermissionError as e:
         logging.error(
             f"WARNING: Certain files were skipped due to permission errors {e}"
