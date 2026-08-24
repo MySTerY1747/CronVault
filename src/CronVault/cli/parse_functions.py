@@ -6,6 +6,7 @@ import re
 import pytimeparse
 from datetime import datetime
 from pathlib import Path
+from CronVault.core.constants import SUPPORTED_ENGINES
 
 
 NAME_DEFAULT: str = "NoName"
@@ -96,6 +97,20 @@ def parse_time_period(time_period: str) -> int:
         raise ValueError(f"Invalid time period: {time_period}")
 
     return int(total_seconds)
+
+
+def parse_engine(engine: str) -> str:
+    if not engine:
+        return SUPPORTED_ENGINES[0]  #  copy
+    if not isinstance(engine, str) or len(engine) < 1:
+        logging.error(f"Invalid backup engine: {engine}")
+        raise ValueError(f"Invalid backup engine: {engine}")
+
+    engine = engine.lower()
+    if engine not in SUPPORTED_ENGINES:
+        logging.error(f"Invalid backup engine: {engine}")
+        raise ValueError(f"Invalid backup engine: {engine}")
+    return engine
 
 
 if __name__ == "__main__":

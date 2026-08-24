@@ -33,6 +33,7 @@ class BackupConfig:
     status: str = "active"
     total_backup_count: int = 0
     last_known_backup: datetime | None = None
+    engine: str = "copy"
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "BackupConfig":
@@ -46,6 +47,7 @@ class BackupConfig:
                 max_backup_size=data["max_backup_size"],
                 status=data.get("status", "active"),
                 total_backup_count=data.get("total_backup_count", 0),
+                engine=data.get("engine", "copy"),
                 last_known_backup=(
                     datetime.fromisoformat(data["last_known_backup"])
                     if data.get("last_known_backup")
@@ -97,6 +99,7 @@ class BackupConfig:
             "max_backup_size": self.max_backup_size,
             "status": self.status,
             "total_backup_count": self.total_backup_count,
+            "engine": self.engine,
             "last_known_backup": (
                 self.last_known_backup.isoformat() if self.last_known_backup else None
             ),
@@ -133,6 +136,14 @@ class BackupConfig:
     def is_active(self) -> bool:
         return self.status == "active"
         #  currently treating *all* other values as inactive
+
+    def get_destination_name(self) -> str:
+        #  if more engines added in the future, consider match statement
+        backup_name = datetime.strftime(datetime.now(), self.name_format)
+        if self.engine == "zip":
+            backup_name += ".zip"
+
+        return backup_name
 
 
 def get_default_backup_name(

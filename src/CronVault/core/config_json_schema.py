@@ -27,6 +27,7 @@ SCHEMA = {
             "minimum": 1,
             "description": "Backup interval in seconds.",
         },
+        "engine": {"type": "string", "enum": ["copy", "zip", "rsync"]},
         "last_known_backup": {
             "type": ["string", "null"],
             "format": "date-time",

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from CronVault.cli.parse_functions import (
+    parse_engine,
     parse_name,
     parse_name_format,
     parse_path,
@@ -48,6 +49,11 @@ create_arguments: list[Argument] = [
         "naming_format",
         "• Naming format for backups, strftime syntax. (or press Enter to use default {name} %Y-%m-%d_%H-%M-%S): ",
         parse_name_format,
+    ),
+    Argument(
+        "engine",
+        "• Backup engine to use for backups: copy, zip, rsync. (or press Enter to use default: copy): ",
+        parse_engine,
     ),
     Argument(
         "name",

@@ -146,8 +146,12 @@ def perform_backup(config: BackupConfig, path_override: Path | None = None) -> b
     destination: Path | None = None
 
     try:
-        backup_name = datetime.strftime(datetime.now(), config.name_format)
-        destination = backup_folder_path / backup_name
+        destination_ending = config.get_destination_name()
+        destination = (
+            config.destination / destination_ending
+            if path_override is None
+            else path_override / destination_ending
+        )
 
         if not pathvalidate.is_valid_filepath(destination, platform="auto"):
             logging.error(
