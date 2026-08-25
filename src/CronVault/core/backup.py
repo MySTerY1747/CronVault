@@ -99,9 +99,16 @@ def find_oldest_backup(file_path: Path) -> Path | None:
                                 marker_raw = archive.read(CRONVAULT_MARKER_FILENAME)
                                 marker_data = json.loads(marker_raw.decode("utf-8"))
                                 creation_dates[marker_data["backup_datetime"]] = item
-                    except (zipfile.BadZipFile, json.JSONDecodeError, KeyError):
+                    except (
+                        zipfile.BadZipFile,
+                        zipfile.LargeZipFile,
+                        json.JSONDecodeError,
+                        KeyError,
+                        OSError,
+                        UnicodeDecodeError,
+                    ):
                         logging.error(
-                            f"CronVault marker for backup {file_path} corrupted."
+                            f"CronVault marker for backup {item} corrupted or unreadable."
                         )
                         continue
 
@@ -158,15 +165,14 @@ def perform_backup(config: BackupConfig, path_override: Path | None = None) -> b
     #  and option to zip by default
     logging.info(f"Performing backup for config {config.name}")
     backup_folder_path = Path(path_override) if path_override else config.destination
+    backup_folder_path.mkdir(parents=True, exist_ok=True)
     destination: Path | None = None
 
     try:
-        destination_ending = config.get_destination_name()
-        destination = (
-            config.destination / destination_ending
-            if path_override is None
-            else path_override / destination_ending
+        base_destination = (
+            path_override if path_override is not None else config.destination
         )
+        destination = base_destination / config.get_destination_name()
 
         if not pathvalidate.is_valid_filepath(destination, platform="auto"):
             logging.error(

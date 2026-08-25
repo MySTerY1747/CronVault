@@ -3,6 +3,7 @@
 
 import logging
 import re
+import pathvalidate
 import pytimeparse
 import shutil
 from datetime import datetime
@@ -62,6 +63,23 @@ def parse_path(folder_path: str) -> str:
         raise NotADirectoryError(f"Path is not a directory: {folder_path}")
 
     return str(path)
+
+
+def parse_destination_path(path_str: str) -> str:
+    if not path_str:
+        return str(Path.cwd().resolve())
+
+    try:
+        resolved_path = Path(path_str).expanduser().resolve()
+    except (RuntimeError, ValueError) as e:
+        logging.error(f"Cannot resolve destination path {path_str}: {e}")
+        raise ValueError(f"Invalid destination path: {path_str}") from e
+
+    if not pathvalidate.is_valid_filepath(str(resolved_path), platform="auto"):
+        logging.error(f"Invalid destinatino path format: {path_str}")
+        raise ValueError(f"Invalid destination path format: {path_str}")
+
+    return str(resolved_path)
 
 
 def parse_name_format(name_format: str | None) -> str:
