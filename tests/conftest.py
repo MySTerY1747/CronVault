@@ -108,6 +108,7 @@ def sample_config_dict():
         "name_format": "%Y-%m-%d_%H-%M-%S",
         "max_backup_size": 53687091200,
         "status": "active",
+        "engine": "copy",
         "total_backup_count": 3,
         "last_known_backup": "2026-08-20T14:30:00",
     }

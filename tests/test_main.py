@@ -864,6 +864,7 @@ def test_fill_missing_create_args_default_values(mocker, tmp_path):
     args = {
         "name": NAME_DEFAULT,
         "naming_format": NAME_DEFAULT,
+        "engine": None,
         "path": Path("."),
     }
 
@@ -871,6 +872,7 @@ def test_fill_missing_create_args_default_values(mocker, tmp_path):
 
     mock_get_default_backup.assert_called_once_with(args["path"], tmp_path)
     assert args["naming_format"] == "expected %Y-%m-%d_%H-%M-%S"
+    assert args["engine"] == "copy"
 
 
 def test_fill_missing_create_args_none_values(mocker, tmp_path):
@@ -882,6 +884,7 @@ def test_fill_missing_create_args_none_values(mocker, tmp_path):
     args = {
         "name": None,
         "naming_format": None,
+        "engine": None,
         "path": Path("."),
     }
 
@@ -889,6 +892,7 @@ def test_fill_missing_create_args_none_values(mocker, tmp_path):
 
     mock_get_default_backup.assert_called_once_with(args["path"], tmp_path)
     assert args["naming_format"] == "expected %Y-%m-%d_%H-%M-%S"
+    assert args["engine"] == "copy"
 
 
 def test_interactive_config_creator_all_values_already_present():
@@ -899,6 +903,7 @@ def test_interactive_config_creator_all_values_already_present():
         "path": "test",
         "naming_format": "test",
         "destination": "test",
+        "engine": "copy",
         "time_period": 500,
     }
 
@@ -910,18 +915,27 @@ def test_interactive_config_creator_all_values_already_present():
 
 def test_interactive_config_creator_no_values_present(mocker, tmp_path):
     mock_input = mocker.patch("CronVault.core.config.input")
-    mock_input.side_effect = [tmp_path, tmp_path, "5M", "", "test", "test"]
+    mock_input.side_effect = [
+        tmp_path,
+        tmp_path,
+        "5M",
+        "",
+        "test",
+        "",
+        "test",
+    ]  #  "" should just use the default in each case
 
     args = {}
 
     interactive_config_creator(args)
-    assert mock_input.call_count == 6
+    assert mock_input.call_count == 7
     assert args == {
         "name": "test",
         "max_backup_size": FIFTY_GB,
         "path": str(tmp_path),
         "naming_format": "test",
         "destination": str(tmp_path),
+        "engine": "copy",
         "time_period": 300,
     }
 
@@ -936,6 +950,7 @@ def test_create_backup_from_args_all_params_given(tmp_path: Path, mocker):
         "path": str(tmp_path),
         "naming_format": "test",
         "destination": str(tmp_path),
+        "engine": "copy",
         "time_period": 300,
     }
 
@@ -968,6 +983,7 @@ def test_create_backup_from_args_all_params_given_duplicate_name(
         "max_backup_size": FIFTY_GB,
         "path": str(tmp_path),
         "naming_format": None,
+        "engine": "copy",
         "destination": str(tmp_path),
         "time_period": 300,
     }
@@ -980,6 +996,7 @@ def test_create_backup_from_args_all_params_given_duplicate_name(
     args["name_format"] = args.pop("naming_format")
     args["last_known_backup"] = None
     args["status"] = "active"
+    args["engine"] = "copy"
     args["total_backup_count"] = 0
 
     mock_interactive_config_creator.assert_not_called()
@@ -1005,6 +1022,7 @@ def test_create_backup_from_args_all_required_params_given_except_name(
         "max_backup_size": FIFTY_GB,
         "path": str(sub_path),
         "naming_format": None,
+        "engine": None,
         "destination": str(sub_path),
         "time_period": 300,
     }
@@ -1017,6 +1035,7 @@ def test_create_backup_from_args_all_required_params_given_except_name(
     args["name_format"] = args.pop("naming_format")
     args["last_known_backup"] = None
     args["status"] = "active"
+    args["engine"] = "copy"
     args["total_backup_count"] = 0
 
     mock_interactive_config_creator.assert_not_called()
@@ -1033,38 +1052,36 @@ def test_create_backup_from_args_no_params(tmp_path: Path, mocker):
     (tmp_path / "exists_too.json").touch()
     mock_input = mocker.patch("CronVault.core.config.input")
     mock_input.side_effect = [
-        str(tmp_path),
-        str(tmp_path),
-        "1500 seconds",
-        "",
-        "exists",
-        "exists",
-        "exists_too",
-        "expected",
+        str(tmp_path),  #  path
+        str(tmp_path),  #  destination
+        "1500 seconds",  #  time_period
+        "",  #  max_backup_size
+        "",  #  naming format
+        "",  #  engine
+        "exists",  #  name (duplicate)
+        "exists",  #  name (duplicate)
+        "exists_too",  #  name (duplicate)
+        "expected",  #  name
     ]
 
-    args = {
+    args: dict[str, object | None] = {
         "name": None,  #  missing CLI args are automatically set to None
-        "max_backup_size": FIFTY_GB,  # default value
+        "max_backup_size": None,
         "path": None,
         "naming_format": None,
         "destination": None,
+        "engine": None,
         "time_period": None,
     }
 
     create_backup_from_args(args, tmp_path)
 
-    args["name"] = "expected"
-    args.pop("naming_format")
-    args["name_format"] = "expected %Y-%m-%d_%H-%M-%S"
-    args["last_known_backup"] = None
-    args["status"] = "active"
-    args["total_backup_count"] = 0
     args = {
         "name": "expected",
         "name_format": "expected %Y-%m-%d_%H-%M-%S",
         "last_known_backup": None,
         "status": "active",
+        "engine": "copy",
         "total_backup_count": 0,
         "max_backup_size": FIFTY_GB,
         "path": str(tmp_path),
@@ -1072,7 +1089,7 @@ def test_create_backup_from_args_no_params(tmp_path: Path, mocker):
         "time_period": 1500,
     }
 
-    assert mock_input.call_count == 8
+    assert mock_input.call_count == 10
     config_location = tmp_path / "expected.json"
     assert config_location.exists()
     config_file_dict = loads(config_location.read_text())

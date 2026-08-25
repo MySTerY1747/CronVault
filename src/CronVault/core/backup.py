@@ -2,6 +2,7 @@
 #  functions for backup execution, directory copying, and cleanup
 
 import send2trash
+import zipfile
 import logging
 import json
 import shutil
@@ -71,25 +72,38 @@ def find_oldest_backup(file_path: Path) -> Path | None:
     result: Path | None = None
     logging.info(f"Finding oldest backup in {file_path}")
     try:
-        if len(list(file_path.iterdir())) == 0:
+        if not file_path.exists() or len(list(file_path.iterdir())) == 0:
             return None
 
         creation_dates = {}
 
         #  use marker to ensure backup is from CronVault
-        for subdirectory in file_path.iterdir():
-            backup_marker = subdirectory / CRONVAULT_MARKER_FILENAME
-            if backup_marker.exists():
-                #  use recorded timestamp instead of stat().st_birthtime
-                #  to ensure consistency and reliability across OSs
-                try:
-                    backup_date = json.loads(backup_marker.read_text())[
-                        "backup_datetime"
-                    ]
-                    creation_dates[backup_date] = subdirectory
-                except (json.JSONDecodeError, KeyError):
-                    logging.error(f"CronVault marker for backup {file_path} corrupted.")
-                    continue
+        for item in file_path.iterdir():
+            if item.is_dir():
+                backup_marker = item / CRONVAULT_MARKER_FILENAME
+                if backup_marker.exists():
+                    #  use recorded timestamp instead of stat().st_birthtime
+                    #  to ensure consistency and reliability across OSs
+                    try:
+                        marker_data = json.loads(backup_marker.read_text())
+                        creation_dates[marker_data["backup_datetime"]] = item
+                    except (json.JSONDecodeError, KeyError):
+                        logging.error(
+                            f"CronVault marker for backup {file_path} corrupted."
+                        )
+                        continue
+                elif item.is_file() and item.suffix == ".zip":
+                    try:
+                        with zipfile.ZipFile(item, "r") as archive:
+                            if CRONVAULT_MARKER_FILENAME in archive.namelist():
+                                marker_raw = archive.read(CRONVAULT_MARKER_FILENAME)
+                                marker_data = json.loads(marker_raw.decode("utf-8"))
+                                creation_dates[marker_data["backup_datetime"]] = item
+                    except (zipfile.BadZipFile, json.JSONDecodeError, KeyError):
+                        logging.error(
+                            f"CronVault marker for backup {file_path} corrupted."
+                        )
+                        continue
 
         if creation_dates:
             oldest_backup_time = min(

@@ -4,6 +4,7 @@
 import logging
 import re
 import pytimeparse
+import shutil
 from datetime import datetime
 from pathlib import Path
 from CronVault.core.constants import SUPPORTED_ENGINES
@@ -110,6 +111,12 @@ def parse_engine(engine: str) -> str:
     if engine not in SUPPORTED_ENGINES:
         logging.error(f"Invalid backup engine: {engine}")
         raise ValueError(f"Invalid backup engine: {engine}")
+
+    if engine == "rsync" and shutil.which("rsync") is None:
+        logging.error("No rsync library found on the system")
+        raise FileNotFoundError(
+            "rsync binary is required for the rsync engine, but was not found in $PATH"
+        )
     return engine
 
 

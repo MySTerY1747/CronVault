@@ -305,6 +305,10 @@ def fill_missing_create_args(
         args["naming_format"] = f"{args['name']} %Y-%m-%d_%H-%M-%S"
         logging.info(f"Backup naming scheme now set to {args['naming_format']}")
 
+    if args["engine"] is None:
+        logging.info("No backup engine set. Using default: copy")
+        args["engine"] = "copy"
+
 
 def interactive_config_creator(args: dict[str, Any]) -> None:
     print(Fore.CYAN + Style.BRIGHT + "Interactive Config Creator:")
