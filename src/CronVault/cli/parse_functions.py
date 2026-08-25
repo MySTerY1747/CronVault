@@ -76,7 +76,7 @@ def parse_destination_path(path_str: str) -> str:
         raise ValueError(f"Invalid destination path: {path_str}") from e
 
     if not pathvalidate.is_valid_filepath(str(resolved_path), platform="auto"):
-        logging.error(f"Invalid destinatino path format: {path_str}")
+        logging.error(f"Invalid destination path format: {path_str}")
         raise ValueError(f"Invalid destination path format: {path_str}")
 
     return str(resolved_path)
