@@ -12,6 +12,3 @@ FIFTY_GB: int = 53_687_091_200  #  50GB
 CONFIG_LOCATION: str = "~/.config/CronVault/"
 DEFAULT_BACKUP_ENGINE = "copy"
 SUPPORTED_ENGINES = ("copy", "zip", "rsync")
-
-if __name__ == "__main__":
-    pass

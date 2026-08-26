@@ -67,7 +67,3 @@ def add_cron_job(config_path: Path = Path(CONFIG_LOCATION).expanduser()) -> None
     except OSError as e:
         logging.exception(f"Got OSError while going through Cron jobs: {e}")
         raise
-
-
-if __name__ == "__main__":
-    pass

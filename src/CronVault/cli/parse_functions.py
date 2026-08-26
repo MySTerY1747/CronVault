@@ -9,17 +9,13 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 from CronVault.core.constants import SUPPORTED_ENGINES
-
-
-NAME_DEFAULT: str = "NoName"
-FIFTY_GB: int = 53_687_091_200  #  50GB
-CONFIG_LOCATION: str = "~/.config/CronVault/"
+from CronVault.core.constants import NAME_DEFAULT, FIFTY_GB
 
 
 def parse_name(name: str) -> str:
     if not name:
         return NAME_DEFAULT
-    if not isinstance(name, str) or not name:
+    if not isinstance(name, str) or not name.isprintable():
         raise ValueError(f"Invalid config name: {name}")
     return name
 
@@ -136,7 +132,3 @@ def parse_engine(engine: str) -> str:
             "rsync binary is required for the rsync engine, but was not found in $PATH"
         )
     return engine
-
-
-if __name__ == "__main__":
-    pass

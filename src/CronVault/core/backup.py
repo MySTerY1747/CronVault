@@ -92,25 +92,25 @@ def find_oldest_backup(file_path: Path) -> Path | None:
                             f"CronVault marker for backup {file_path} corrupted."
                         )
                         continue
-                elif item.is_file() and item.suffix == ".zip":
-                    try:
-                        with zipfile.ZipFile(item, "r") as archive:
-                            if CRONVAULT_MARKER_FILENAME in archive.namelist():
-                                marker_raw = archive.read(CRONVAULT_MARKER_FILENAME)
-                                marker_data = json.loads(marker_raw.decode("utf-8"))
-                                creation_dates[marker_data["backup_datetime"]] = item
-                    except (
-                        zipfile.BadZipFile,
-                        zipfile.LargeZipFile,
-                        json.JSONDecodeError,
-                        KeyError,
-                        OSError,
-                        UnicodeDecodeError,
-                    ):
-                        logging.error(
-                            f"CronVault marker for backup {item} corrupted or unreadable."
-                        )
-                        continue
+            elif item.is_file() and item.suffix == ".zip":
+                try:
+                    with zipfile.ZipFile(item, "r") as archive:
+                        if CRONVAULT_MARKER_FILENAME in archive.namelist():
+                            marker_raw = archive.read(CRONVAULT_MARKER_FILENAME)
+                            marker_data = json.loads(marker_raw.decode("utf-8"))
+                            creation_dates[marker_data["backup_datetime"]] = item
+                except (
+                    zipfile.BadZipFile,
+                    zipfile.LargeZipFile,
+                    json.JSONDecodeError,
+                    KeyError,
+                    OSError,
+                    UnicodeDecodeError,
+                ):
+                    logging.error(
+                        f"CronVault marker for backup {item} corrupted or unreadable."
+                    )
+                    continue
 
         if creation_dates:
             oldest_backup_time = min(
@@ -157,7 +157,7 @@ def cleanup_failed_backup(backup_folder_path: Path) -> bool:
         return True
     except (OSError, IOError):
         logging.error("Unable to clean failed backup.")
-    return False
+        return False
 
 
 def perform_backup(config: BackupConfig, path_override: Path | None = None) -> bool:
@@ -238,7 +238,3 @@ def perform_backup(config: BackupConfig, path_override: Path | None = None) -> b
                 logging.info("Failed to clean up. Exiting.")
             return False
         raise
-
-
-if __name__ == "__main__":
-    pass

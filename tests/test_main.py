@@ -4,15 +4,19 @@
 from json import dumps, loads
 import subprocess
 import sys
+import zipfile
 from unittest.mock import MagicMock
 
 from CronVault.cli.parse_functions import (
+    parse_destination_path,
+    parse_engine,
     parse_name,
     parse_name_format,
     parse_path,
     parse_size,
     parse_time_period,
 )
+from CronVault.core.backup_engines import rsync_engine, zip_engine
 from CronVault.core.config import (
     BackupConfig,
     get_default_backup_name,
@@ -30,6 +34,7 @@ from CronVault.core.config import (
     fill_missing_create_args,
 )
 from CronVault.core.backup import (
+    get_device_free_space,
     run_backup_if_needed,
     cleanup_failed_backup,
     find_oldest_backup,
@@ -44,6 +49,7 @@ from CronVault.core.constants import (
     CONFIG_FILE_NAME,
     DEFAULT_BACKUP_CHECK_INTERVAL_MINUTES,
     FIFTY_GB,
+    MAX_DELETE_OLD_BACKUP_ATTEMPTS,
 )
 import pytest
 from pathlib import Path
@@ -79,6 +85,8 @@ def test_cli_args():
         "--naming-format",
         "-t",
         "--time-period",
+        "-e",
+        "--engine",
     ]
     result = subprocess.run(
         [sys.executable, "-m", "CronVault.main", "create", "-h"],
@@ -108,6 +116,11 @@ def test_parse_name_default():
     assert parse_name("") == NAME_DEFAULT
 
 
+def test_parse_name_raises():
+    with pytest.raises(ValueError):
+        parse_name("\0")
+
+
 @pytest.mark.parametrize(
     "size, expected",
     [
@@ -124,6 +137,8 @@ def test_parse_size(size: str, expected: int):
 
 
 def test_parse_size_incorrect_input():
+    with pytest.raises(ValueError):
+        parse_size([15])  #  pyright: ignore
     with pytest.raises(ValueError):
         parse_size("Mb15")
     with pytest.raises(ValueError):
@@ -146,9 +161,7 @@ def test_path_exists_existent(tmp_path):
 
 def test_parse_name_format_long_name():
     with pytest.raises(ValueError):
-        parse_name_format(
-            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-        )
+        parse_name_format("A" * 9999)
 
 
 def test_parse_name_format_datetime():
@@ -186,6 +199,60 @@ def test_parse_time_period_error():
         parse_time_period(empty_input)
     with pytest.raises(ValueError):
         parse_time_period(unknown_values)
+
+
+@pytest.mark.parametrize(
+    "user_input, expected_output",
+    [
+        ("", "copy"),
+        ("COPY", "copy"),
+        ("zip", "zip"),
+        ("RSYNc", "rsync"),
+        ("ZIP", "zip"),
+    ],
+)
+def test_parse_engine_valid(user_input, expected_output):
+    assert parse_engine(user_input) == expected_output
+
+
+def test_get_default_backup_name_raises():
+    with pytest.raises(ValueError):
+        get_default_backup_name("")
+
+
+@pytest.mark.parametrize(
+    "user_input",
+    [
+        ("tar"),
+        ("\0"),
+        ("invalid"),
+        ("rsynccc"),
+        (-1),
+    ],
+)
+def test_parse_engine_invalid(user_input):
+    with pytest.raises(ValueError):
+        parse_engine(user_input)
+
+
+def test_parse_engines_missing_rsync_binary(mocker):
+    mocker.patch("shutil.which", return_value=None)
+    with pytest.raises(FileNotFoundError):
+        parse_engine("rsync")
+
+
+def test_parse_destination_path_resolves_and_defaults(tmp_path: Path):
+    assert parse_destination_path("") == str(Path.cwd().resolve())
+
+    relative_target = tmp_path / "subdir" / ".." / "final_dir"
+    result = parse_destination_path(str(relative_target))
+    assert result == str(tmp_path / "final_dir")
+
+
+def test_parse_destination_path_invalid_path(tmp_path: Path, mocker):
+    mocker.patch("pathvalidate.is_valid_filepath", return_value=False)
+    with pytest.raises(ValueError):
+        parse_destination_path(str(tmp_path))
 
 
 @pytest.mark.parametrize(
@@ -263,6 +330,12 @@ def test_print_configs(generate_test_configs, capsys):
         "inactive",
     ]:
         assert text in captured.out
+
+
+def test_print_configs_empty_list(mocker):
+    mock_print = mocker.patch("CronVault.core.config.print")
+    print_configs([])
+    assert mock_print.call_count == 2
 
 
 def test_get_all_backups_skips_invalid_json_files(
@@ -404,6 +477,12 @@ def test_run_backup_if_needed(single_valid_config_directory, mocker):
     ).total_seconds() < 1
 
 
+def test_run_backup_if_needed_skips_when_config_not_exist(mocker, tmp_path):
+    mock_from_file = mocker.patch("CronVault.core.backup.BackupConfig.from_file")
+    run_backup_if_needed("name", skip_checks=False, file_path=tmp_path)
+    mock_from_file.assert_not_called()
+
+
 def test_run_backup_file_edge_cases(populated_config_directory, mocker, caplog):
     #  documents should be backed up, same with notes
     #  photos, music, projects should not (photos & music inactive, projects active but recently backed up)
@@ -496,6 +575,33 @@ def test_find_oldest_backup(tmp_path):
     assert find_oldest_backup(tmp_path) == (tmp_path / "dirCRONVAULT_older")
 
 
+def test_find_oldest_backup_ignores_keyerror(tmp_path: Path):
+    for dir_name in [
+        "dir1",
+        "dir2",
+        "dir3",
+        "dirCRONVAULT_older_but_corrupt",
+        "dirCRONVAULT",
+    ]:
+        (tmp_path / dir_name).mkdir()
+        if "CRON" in dir_name:
+            marker = loads(generate_cronvault_marker(tmp_path, tmp_path))
+            marker["backup_datetime"] = (
+                "2023-01-01T00:00:00"
+                if ("older" in dir_name)
+                else "2025-01-01T00:00:00"
+            )
+            if "older" in dir_name:
+                marker.pop("backup_datetime")
+            (tmp_path / dir_name / CRONVAULT_MARKER_FILENAME).write_text(dumps(marker))
+    assert find_oldest_backup(tmp_path) == (tmp_path / "dirCRONVAULT")
+
+
+def test_find_oldest_backup_early_exit_when_empty(tmp_path):
+    assert find_oldest_backup(tmp_path) is None
+    assert find_oldest_backup(tmp_path / "non_existent_dir") is None
+
+
 def test_find_oldest_backup_no_cronvault_dirs(tmp_path):
     #  checks that non-CronVault dirs are skipped, and oldest valid dir returned
     for dir_name in ["dir1", "dir2", "dir3", "dir4", "dir5"]:
@@ -536,6 +642,21 @@ def test_cleanup_failed_backup(tmp_path):
     assert final_size == initial_size
     assert existing_dir.exists()
     assert not sub_dir.exists()
+
+
+def test_cleanup_failed_backup_non_existent_dir(tmp_path: Path, mocker):
+    non_existent_dir = tmp_path / "non_existent_dir"
+    mock_send_trash = mocker.patch("send2trash.send2trash")
+    assert cleanup_failed_backup(non_existent_dir) is True
+    mock_send_trash.assert_not_called()
+
+
+def test_cleanup_failed_backup_fails(tmp_path: Path, mocker):
+    test_dir = tmp_path / "test_dir"
+    test_dir.mkdir()
+    mock_send_trash = mocker.patch("send2trash.send2trash")
+    mock_send_trash.side_effect = OSError()
+    assert cleanup_failed_backup(test_dir) is False
 
 
 def test_perform_backup_invalid_path(single_valid_config_directory, caplog):
@@ -803,6 +924,18 @@ def test_ensure_single_cron_job_malformed_comment():
     job.delete.assert_called_once()
 
 
+def test_ensure_single_cron_job_malformed_prefix():
+    job = MagicMock()
+    job.is_enabled.return_value = True
+    job.is_valid.return_value = True
+    job.comment = "Wrong comment"
+
+    result = ensure_single_cron_job([job], 10)
+
+    assert result is False
+    job.delete.assert_called_once()
+
+
 def test_add_cron_job_creates_job(mocker, tmp_path: Path):
     mock_get_frequency = mocker.patch(
         "CronVault.core.cron.get_backup_frequency_from_config"
@@ -849,6 +982,13 @@ def test_add_cron_job_does_not_create_duplicate(mocker, tmp_path: Path):
 
     cron.new.assert_not_called()
     cron.write.assert_called_once()
+
+
+def test_parse_path_file(tmp_path: Path):
+    file = tmp_path / "filename.txt"
+    file.touch()
+    with pytest.raises(NotADirectoryError):
+        parse_path(str(file))
 
 
 def test_parse_path_empty_uses_current_directory():
@@ -967,6 +1107,25 @@ def test_create_backup_from_args_all_params_given(tmp_path: Path, mocker):
     config_dict = loads(config_location.read_text())
     assert config_dict == args
     assert config_dict["name_format"] == "test"
+
+
+def test_create_backup_from_args_exits_when_name_exists(tmp_path: Path, mocker):
+    mock_write = mocker.patch("CronVault.core.config.BackupConfig.write_to_config_file")
+    mocker.patch("CronVault.core.config.is_name_duplicate", return_value=False)
+
+    (tmp_path / "test.json").touch()
+    args = {
+        "name": "test",
+        "max_backup_size": FIFTY_GB,
+        "path": str(tmp_path),
+        "naming_format": "test",
+        "destination": str(tmp_path),
+        "engine": "copy",
+        "time_period": 300,
+    }
+
+    create_backup_from_args(args, tmp_path)
+    mock_write.assert_not_called()
 
 
 def test_create_backup_from_args_all_params_given_duplicate_name(
@@ -1133,6 +1292,82 @@ def test_backup_config_from_dict_handles_defaults_and_null_backup():
     assert config.to_dict()["last_known_backup"] is None
 
 
+def test_backup_config_from_dict_missing_params_raises_error():
+    minimal_data = {
+        "path": "/tmp/projects",
+        "destination": "/tmp/backups",
+        "time_period": 3600,
+        "name_format": "%Y%m%d",
+        "max_backup_size": 1000,
+    }
+    with pytest.raises(KeyError):
+        BackupConfig.from_dict(minimal_data)
+
+
+def test_backup_config_write_to_config_file(tmp_path, sample_config_dict):
+    config = BackupConfig.from_dict(sample_config_dict)
+    config.write_to_config_file(tmp_path)
+    config_file_path = tmp_path / f"{config.name}.json"
+    assert config_file_path.exists()
+    assert BackupConfig.from_file(config_file_path) == config
+
+
+def test_backup_config_write_to_config_file_OSERROR(
+    tmp_path, mocker, sample_config_dict
+):
+    mock_write = mocker.patch("pathlib.Path.write_text")
+    mock_write.side_effect = OSError()
+    config = BackupConfig.from_dict(sample_config_dict)
+
+    with pytest.raises(OSError):
+        config.write_to_config_file(tmp_path)
+
+
+def test_is_name_duplicate_creates_config_path(tmp_path: Path):
+    test_dir = tmp_path / "test_dir"
+    is_name_duplicate("name", test_dir)
+    assert test_dir.exists() and test_dir.is_dir()
+
+
+def test_is_name_duplicate_OSERROR(tmp_path, mocker):
+    mock_exists = mocker.patch("pathlib.Path.exists")
+    mock_exists.side_effect = OSError()
+
+    with pytest.raises(OSError):
+        is_name_duplicate("name", tmp_path)
+
+
+def test_delete_backup_OSERROR(tmp_path, mocker):
+    (tmp_path / "some_file.json").touch()
+    mock_write = mocker.patch("send2trash.send2trash")
+    mock_write.side_effect = OSError()
+
+    with pytest.raises(OSError):
+        delete_backup("some_file", tmp_path)
+
+
+def test_get_destination_name_zip_engine(sample_config_dict):
+    sample_config_dict["engine"] = "zip"
+    sample_config_dict["name_format"] = "notes_%Y"
+    config = BackupConfig.from_dict(sample_config_dict)
+
+    destination_name = config.get_destination_name()
+
+    assert destination_name.startswith("notes_")
+    assert destination_name.endswith(".zip")
+
+
+def test_get_destination_name_copy_engine(sample_config_dict):
+    sample_config_dict["engine"] = "copy"
+    sample_config_dict["name_format"] = "notes_%Y"
+    config = BackupConfig.from_dict(sample_config_dict)
+
+    destination_name = config.get_destination_name()
+
+    assert destination_name.startswith("notes_")
+    assert not destination_name.endswith(".zip")
+
+
 def test_backup_config_handles_legacy_naming_format_key():
     data = {
         "name": "photos",
@@ -1145,3 +1380,214 @@ def test_backup_config_handles_legacy_naming_format_key():
 
     config = BackupConfig.from_dict(data)
     assert config.name_format == "photos_%Y"
+
+
+def test_zip_enging_creates_archive_with_marker(tmp_path: Path):
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "file1.txt").write_text("hello world")
+
+    nested_dir = source / "nested"
+    nested_dir.mkdir()
+    (nested_dir / "file2.txt").write_text("nested content")
+    destination_zip = tmp_path / "backup.zip"
+    marker_content = '{"backup_datetime": "2026-08-25T14:00:00"}'
+
+    zip_engine(source, destination_zip, marker_content)
+    assert destination_zip.exists()
+    assert destination_zip.is_file()
+
+    with zipfile.ZipFile(destination_zip, "r") as archive:
+        namelist = archive.namelist()
+        assert "file1.txt" in namelist
+        assert "nested/file2.txt" in namelist
+        assert CRONVAULT_MARKER_FILENAME in namelist
+        assert archive.read("file1.txt").decode("utf-8") == "hello world"
+        assert archive.read("nested/file2.txt").decode("utf-8") == "nested content"
+        assert archive.read(CRONVAULT_MARKER_FILENAME).decode("utf-8") == marker_content
+
+
+def test_rsync_engine_success(tmp_path: Path, mocker):
+    mocker.patch("shutil.which", return_value="/usr/bin/rsync")
+    mock_run = mocker.patch("subprocess.run")
+    mock_run.return_value = subprocess.CompletedProcess(
+        args=[], returncode=0, stdout="", stderr=""
+    )
+
+    source = tmp_path / "source"
+    source.mkdir()
+    destination = tmp_path / "dest"
+    marker_content = '{"backup_datetime": "2026-08-25T14:00:00"}'
+
+    rsync_engine(source, destination, marker_content)
+
+    assert destination.exists()
+    mock_run.assert_called_once()
+    cmd_called = mock_run.call_args[0][0]
+    assert cmd_called[0] == "rsync"
+    assert cmd_called[-2].endswith("/")  #  slash addition works
+    assert cmd_called[-1].endswith("/")  #  slash addition works
+    marker_file = destination / CRONVAULT_MARKER_FILENAME
+    assert marker_file.exists()
+    assert marker_file.read_text() == marker_content
+
+
+def test_rsync_engine_missing_binary(tmp_path: Path, mocker):
+    mocker.patch("shutil.which", return_value=None)
+    with pytest.raises(FileNotFoundError):
+        rsync_engine(tmp_path / "source", tmp_path / "dest", "marker")
+
+
+def test_rsync_engine_failure_raises_runtime_error(tmp_path: Path, mocker):
+    mocker.patch("shutil.which", return_value="/usr/bin/rsync")
+    mock_run = mocker.patch("subprocess.run")
+    mock_run.return_value = subprocess.CompletedProcess(
+        args=[], returncode=12, stdout="", stderr="Permission denied"
+    )
+    with pytest.raises(RuntimeError) as exc_info:
+        rsync_engine(tmp_path / "source", tmp_path / "dest", "marker")
+    assert "Permission denied" in str(exc_info.value)
+
+
+def test_find_oldest_backup_with_mixed_engines(tmp_path: Path):
+    dir_backup = tmp_path / "backup_dir_2025"
+    dir_backup.mkdir()
+    marker_dir = {"backup_datetime": "2025-06-01T12:00:00"}
+    (dir_backup / CRONVAULT_MARKER_FILENAME).write_text(dumps(marker_dir))
+
+    zip_backup = tmp_path / "backup_2024.zip"
+    marker_zip = {"backup_datetime": "2024-01-01T12:00:00"}
+    with zipfile.ZipFile(zip_backup, "w") as archive:
+        archive.writestr(CRONVAULT_MARKER_FILENAME, dumps(marker_zip))
+
+    unrelated_zip = tmp_path / "unrelated.zip"
+    with zipfile.ZipFile(unrelated_zip, "w") as archive:
+        archive.writestr("some_file.txt", "data")
+
+    corrupted_zip = tmp_path / "broken.zip"
+    corrupted_zip.write_text("not a real zip file")
+
+    oldest = find_oldest_backup(tmp_path)
+    assert oldest == zip_backup
+
+
+def test_get_device_free_space(tmp_path: Path, mocker):
+    mock_disk_usage = mocker.patch(
+        "shutil.disk_usage", return_value=["something", "something", 5]
+    )
+    assert get_device_free_space(tmp_path) == 5
+    mock_disk_usage.assert_called_once()
+
+
+def test_perform_backup_exceeds_max_deletion_attempts(
+    tmp_path: Path, sample_config_dict, mocker, caplog
+):
+    mocker.patch("CronVault.core.backup.get_directory_size", return_value=10_000)
+    mocker.patch("CronVault.core.backup.get_device_free_space", return_value=1_000_000)
+    mock_trash = mocker.patch("CronVault.core.backup.send2trash.send2trash")
+
+    dummy_oldest = tmp_path / "old_backup"
+    mock_find_oldest = mocker.patch(
+        "CronVault.core.backup.find_oldest_backup", return_value=dummy_oldest
+    )
+
+    sample_config_dict["path"] = str(tmp_path / "source")
+    sample_config_dict["destination"] = str(tmp_path / "dest")
+    sample_config_dict["max_backup_size"] = 1_000
+    config = BackupConfig.from_dict(sample_config_dict)
+
+    result = perform_backup(config)
+
+    assert result is False
+    assert mock_find_oldest.call_count == MAX_DELETE_OLD_BACKUP_ATTEMPTS
+    assert mock_trash.call_count == MAX_DELETE_OLD_BACKUP_ATTEMPTS
+    assert "Reached maximum number of older backup deletion attempts" in caplog.text
+
+
+def test_perform_backup_aborts_when_destination_exists(
+    tmp_path: Path, sample_config_dict, caplog
+):
+    source = tmp_path / "source"
+    source.mkdir()
+    dest_dir = tmp_path / "dest"
+    dest_dir.mkdir()
+
+    sample_config_dict["path"] = str(source)
+    sample_config_dict["destination"] = str(dest_dir)
+    sample_config_dict["name_format"] = "fixed_snapshot_name"
+    config = BackupConfig.from_dict(sample_config_dict)
+
+    collision_path = dest_dir / "fixed_snapshot_name"
+    collision_path.mkdir()
+
+    result = perform_backup(config)
+
+    assert result is False
+    assert (
+        f"Destination path {collision_path} already exists. Aborting..." in caplog.text
+    )
+
+
+def test_perform_backup_permission_error_triggers_cleanup(
+    tmp_path: Path, sample_config_dict, mocker, caplog
+):
+    source = tmp_path / "source"
+    source.mkdir()
+    dest_dir = tmp_path / "dest"
+    dest_dir.mkdir()
+
+    mock_cleanup = mocker.patch("CronVault.core.backup.cleanup_failed_backup")
+    mock_engine = mocker.MagicMock(
+        side_effect=PermissionError("Read denied on file.txt")
+    )
+
+    # Patch the dictionary entry directly
+    mocker.patch.dict(
+        "CronVault.core.backup.ENGINE_REGISTRY",
+        {"copy": mock_engine},
+    )
+
+    sample_config_dict["path"] = str(source)
+    sample_config_dict["destination"] = str(dest_dir)
+    sample_config_dict["name_format"] = "perm_test_%Y"
+    config = BackupConfig.from_dict(sample_config_dict)
+
+    result = perform_backup(config)
+
+    assert result is False
+    mock_cleanup.assert_called_once()
+    assert "WARNING: Certain files were skipped due to permission errors" in caplog.text
+
+
+def test_backup_config_destination_name_with_zip_engine(sample_config_dict):
+    sample_config_dict["engine"] = "zip"
+    sample_config_dict["name_format"] = "backup_%Y"
+    config = BackupConfig.from_dict(sample_config_dict)
+
+    destination_name = config.get_destination_name()
+    assert destination_name.endswith(".zip")
+    assert destination_name.startswith("backup_")
+
+
+def test_perform_backup_executes_zip_engine(tmp_path: Path, sample_config_dict):
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "doc.txt").write_text("content to zip")
+
+    backup_dir = tmp_path / "destination_backups"
+
+    sample_config_dict["path"] = str(source)
+    sample_config_dict["destination"] = str(backup_dir)
+    sample_config_dict["engine"] = "zip"
+    sample_config_dict["max_backup_size"] = FIFTY_GB
+
+    config = BackupConfig.from_dict(sample_config_dict)
+
+    success = perform_backup(config)
+    assert success is True
+    created_zips = list(backup_dir.glob("*.zip"))
+    assert len(created_zips) == 1
+
+    with zipfile.ZipFile(created_zips[0], "r") as archive:
+        assert "doc.txt" in archive.namelist()
+        assert CRONVAULT_MARKER_FILENAME in archive.namelist()

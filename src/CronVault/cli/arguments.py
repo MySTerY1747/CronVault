@@ -62,6 +62,3 @@ create_arguments: list[Argument] = [
         parse_name,
     ),
 ]
-
-if __name__ == "__main__":
-    pass
