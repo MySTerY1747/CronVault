@@ -1382,7 +1382,7 @@ def test_backup_config_handles_legacy_naming_format_key():
     assert config.name_format == "photos_%Y"
 
 
-def test_zip_enging_creates_archive_with_marker(tmp_path: Path):
+def test_zip_engine_creates_archive_with_marker(tmp_path: Path):
     source = tmp_path / "source"
     source.mkdir()
     (source / "file1.txt").write_text("hello world")
