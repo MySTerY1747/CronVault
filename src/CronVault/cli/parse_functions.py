@@ -3,20 +3,19 @@
 
 import logging
 import re
+import pathvalidate
 import pytimeparse
+import shutil
 from datetime import datetime
 from pathlib import Path
-
-
-NAME_DEFAULT: str = "NoName"
-FIFTY_GB: int = 53_687_091_200  #  50GB
-CONFIG_LOCATION: str = "~/.config/CronVault/"
+from CronVault.core.constants import SUPPORTED_ENGINES
+from CronVault.core.constants import NAME_DEFAULT, FIFTY_GB
 
 
 def parse_name(name: str) -> str:
     if not name:
         return NAME_DEFAULT
-    if not isinstance(name, str) or not name:
+    if not isinstance(name, str) or not name.isprintable():
         raise ValueError(f"Invalid config name: {name}")
     return name
 
@@ -62,6 +61,23 @@ def parse_path(folder_path: str) -> str:
     return str(path)
 
 
+def parse_destination_path(path_str: str) -> str:
+    if not path_str:
+        return str(Path.cwd().resolve())
+
+    try:
+        resolved_path = Path(path_str).expanduser().resolve()
+    except (RuntimeError, ValueError) as e:
+        logging.error(f"Cannot resolve destination path {path_str}: {e}")
+        raise ValueError(f"Invalid destination path: {path_str}") from e
+
+    if not pathvalidate.is_valid_filepath(str(resolved_path), platform="auto"):
+        logging.error(f"Invalid destination path format: {path_str}")
+        raise ValueError(f"Invalid destination path format: {path_str}")
+
+    return str(resolved_path)
+
+
 def parse_name_format(name_format: str | None) -> str:
     """parses the name format CLI argument. Checks whether it is a valid name format to be used with strftime
 
@@ -98,5 +114,21 @@ def parse_time_period(time_period: str) -> int:
     return int(total_seconds)
 
 
-if __name__ == "__main__":
-    pass
+def parse_engine(engine: str) -> str:
+    if not engine:
+        return SUPPORTED_ENGINES[0]  #  copy
+    if not isinstance(engine, str) or len(engine) < 1:
+        logging.error(f"Invalid backup engine: {engine}")
+        raise ValueError(f"Invalid backup engine: {engine}")
+
+    engine = engine.lower()
+    if engine not in SUPPORTED_ENGINES:
+        logging.error(f"Invalid backup engine: {engine}")
+        raise ValueError(f"Invalid backup engine: {engine}")
+
+    if engine == "rsync" and shutil.which("rsync") is None:
+        logging.error("No rsync library found on the system")
+        raise FileNotFoundError(
+            "rsync binary is required for the rsync engine, but was not found in $PATH"
+        )
+    return engine

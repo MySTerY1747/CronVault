@@ -2,6 +2,7 @@
 #  functions for backup execution, directory copying, and cleanup
 
 import send2trash
+import zipfile
 import logging
 import json
 import shutil
@@ -14,6 +15,7 @@ from CronVault.core.constants import (
     CRONVAULT_MARKER_FILENAME,
     MAX_DELETE_OLD_BACKUP_ATTEMPTS,
 )
+from CronVault.core.backup_engines import ENGINE_REGISTRY, copy_engine
 from jsonschema import ValidationError
 
 
@@ -70,24 +72,44 @@ def find_oldest_backup(file_path: Path) -> Path | None:
     result: Path | None = None
     logging.info(f"Finding oldest backup in {file_path}")
     try:
-        if len(list(file_path.iterdir())) == 0:
+        if not file_path.exists() or len(list(file_path.iterdir())) == 0:
             return None
 
         creation_dates = {}
 
         #  use marker to ensure backup is from CronVault
-        for subdirectory in file_path.iterdir():
-            backup_marker = subdirectory / CRONVAULT_MARKER_FILENAME
-            if backup_marker.exists():
-                #  use recorded timestamp instead of stat().st_birthtime
-                #  to ensure consistency and reliability across OSs
+        for item in file_path.iterdir():
+            if item.is_dir():
+                backup_marker = item / CRONVAULT_MARKER_FILENAME
+                if backup_marker.exists():
+                    #  use recorded timestamp instead of stat().st_birthtime
+                    #  to ensure consistency and reliability across OSs
+                    try:
+                        marker_data = json.loads(backup_marker.read_text())
+                        creation_dates[marker_data["backup_datetime"]] = item
+                    except (json.JSONDecodeError, KeyError):
+                        logging.error(
+                            f"CronVault marker for backup {file_path} corrupted."
+                        )
+                        continue
+            elif item.is_file() and item.suffix == ".zip":
                 try:
-                    backup_date = json.loads(backup_marker.read_text())[
-                        "backup_datetime"
-                    ]
-                    creation_dates[backup_date] = subdirectory
-                except (json.JSONDecodeError, KeyError):
-                    logging.error(f"CronVault marker for backup {file_path} corrupted.")
+                    with zipfile.ZipFile(item, "r") as archive:
+                        if CRONVAULT_MARKER_FILENAME in archive.namelist():
+                            marker_raw = archive.read(CRONVAULT_MARKER_FILENAME)
+                            marker_data = json.loads(marker_raw.decode("utf-8"))
+                            creation_dates[marker_data["backup_datetime"]] = item
+                except (
+                    zipfile.BadZipFile,
+                    zipfile.LargeZipFile,
+                    json.JSONDecodeError,
+                    KeyError,
+                    OSError,
+                    UnicodeDecodeError,
+                ):
+                    logging.error(
+                        f"CronVault marker for backup {item} corrupted or unreadable."
+                    )
                     continue
 
         if creation_dates:
@@ -135,7 +157,7 @@ def cleanup_failed_backup(backup_folder_path: Path) -> bool:
         return True
     except (OSError, IOError):
         logging.error("Unable to clean failed backup.")
-    return False
+        return False
 
 
 def perform_backup(config: BackupConfig, path_override: Path | None = None) -> bool:
@@ -143,11 +165,14 @@ def perform_backup(config: BackupConfig, path_override: Path | None = None) -> b
     #  and option to zip by default
     logging.info(f"Performing backup for config {config.name}")
     backup_folder_path = Path(path_override) if path_override else config.destination
+    backup_folder_path.mkdir(parents=True, exist_ok=True)
     destination: Path | None = None
 
     try:
-        backup_name = datetime.strftime(datetime.now(), config.name_format)
-        destination = backup_folder_path / backup_name
+        base_destination = (
+            path_override if path_override is not None else config.destination
+        )
+        destination = base_destination / config.get_destination_name()
 
         if not pathvalidate.is_valid_filepath(destination, platform="auto"):
             logging.error(
@@ -191,18 +216,11 @@ def perform_backup(config: BackupConfig, path_override: Path | None = None) -> b
             logging.error(f"Destination path {destination} already exists. Aborting...")
             return False
 
-        destination.mkdir()
-
-        #  `copy_into` was introduced in Python 3.14. This line should work, but pyright isn't picking it up for some reason...
-        logging.info(f"Copying contents of {config.path} to {destination}...")
-        config.path.copy_into(destination, preserve_metadata=True)  # pyright: ignore
-        logging.info("Copying complete")
-        cronvault_marker = destination / CRONVAULT_MARKER_FILENAME
-        cronvault_marker.write_text(
-            generate_cronvault_marker(config.path, backup_folder_path)
-        )
-        logging.info(f"Wrote CronVault marker to {cronvault_marker}")
+        marker_content = generate_cronvault_marker(config.path, backup_folder_path)
+        current_engine = ENGINE_REGISTRY.get(config.engine, copy_engine)
+        current_engine(config.path, destination, marker_content)
         return True
+
     except PermissionError as e:
         logging.error(
             f"WARNING: Certain files were skipped due to permission errors {e}"
@@ -220,7 +238,3 @@ def perform_backup(config: BackupConfig, path_override: Path | None = None) -> b
                 logging.info("Failed to clean up. Exiting.")
             return False
         raise
-
-
-if __name__ == "__main__":
-    pass

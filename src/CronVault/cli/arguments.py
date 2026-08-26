@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from typing import Callable
 
 from CronVault.cli.parse_functions import (
+    parse_destination_path,
+    parse_engine,
     parse_name,
     parse_name_format,
     parse_path,
@@ -32,7 +34,7 @@ create_arguments: list[Argument] = [
     Argument(
         "destination",
         "• Destination path for backups (or press Enter to use current working directory): ",
-        parse_path,
+        parse_destination_path,
     ),
     Argument(
         "time_period",
@@ -50,11 +52,13 @@ create_arguments: list[Argument] = [
         parse_name_format,
     ),
     Argument(
+        "engine",
+        "• Backup engine to use for backups: copy, zip, rsync. (or press Enter to use default: copy): ",
+        parse_engine,
+    ),
+    Argument(
         "name",
         "• Name to identify this backup (or press Enter to use default name from path): ",
         parse_name,
     ),
 ]
-
-if __name__ == "__main__":
-    pass

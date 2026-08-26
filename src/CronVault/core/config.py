@@ -33,6 +33,7 @@ class BackupConfig:
     status: str = "active"
     total_backup_count: int = 0
     last_known_backup: datetime | None = None
+    engine: str = "copy"
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "BackupConfig":
@@ -46,6 +47,7 @@ class BackupConfig:
                 max_backup_size=data["max_backup_size"],
                 status=data.get("status", "active"),
                 total_backup_count=data.get("total_backup_count", 0),
+                engine=data.get("engine", "copy"),
                 last_known_backup=(
                     datetime.fromisoformat(data["last_known_backup"])
                     if data.get("last_known_backup")
@@ -97,6 +99,7 @@ class BackupConfig:
             "max_backup_size": self.max_backup_size,
             "status": self.status,
             "total_backup_count": self.total_backup_count,
+            "engine": self.engine,
             "last_known_backup": (
                 self.last_known_backup.isoformat() if self.last_known_backup else None
             ),
@@ -133,6 +136,14 @@ class BackupConfig:
     def is_active(self) -> bool:
         return self.status == "active"
         #  currently treating *all* other values as inactive
+
+    def get_destination_name(self) -> str:
+        #  if more engines added in the future, consider match statement
+        backup_name = datetime.strftime(datetime.now(), self.name_format)
+        if self.engine == "zip":
+            backup_name += ".zip"
+
+        return backup_name
 
 
 def get_default_backup_name(
@@ -294,6 +305,10 @@ def fill_missing_create_args(
         args["naming_format"] = f"{args['name']} %Y-%m-%d_%H-%M-%S"
         logging.info(f"Backup naming scheme now set to {args['naming_format']}")
 
+    if args["engine"] is None:
+        logging.info("No backup engine set. Using default: copy")
+        args["engine"] = "copy"
+
 
 def interactive_config_creator(args: dict[str, Any]) -> None:
     print(Fore.CYAN + Style.BRIGHT + "Interactive Config Creator:")
@@ -369,7 +384,3 @@ def get_backup_frequency_from_config(config_dir: Path) -> int:
             f"Corrupted/invalid config file: {config_file_path}. 'backup_frequency_minutes' property is missing or invalid"
         )
     return config["backup_frequency_minutes"]
-
-
-if __name__ == "__main__":
-    pass

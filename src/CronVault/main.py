@@ -25,6 +25,7 @@ from CronVault.cli.parse_functions import (
     parse_name_format,
     parse_path,
     parse_time_period,
+    parse_engine,
 )
 
 if __name__ == "__main__":
@@ -118,6 +119,12 @@ if __name__ == "__main__":
         type=parse_time_period,
         help='Time period between backups. Uses natural syntax: "5 days", "15d10h", "1w 3d 2h 32m", "172 hours", etc.',
     )
+    parser_create.add_argument(
+        "-e",
+        "--engine",
+        type=parse_engine,
+        help="Backup engine to use when performing backups. Currently supported: copy, zip, rsync",
+    )
 
     args = parser.parse_args()
     logging.basicConfig(
@@ -181,4 +188,5 @@ if __name__ == "__main__":
 
     logging.info("Handler function complete. Exiting...")
 
-    # TODO: Add a mechanism for multiple types of backup, e.g. ZIP, Rsync, etc
+    # TODO: Update README
+    # TODO: Fix default logging level, and log to file
